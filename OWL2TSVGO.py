@@ -15,25 +15,25 @@ manager = OWLManager.createOWLOntologyManager()
 ontset = set()
 ontset.add(manager.loadOntologyFromOntologyDocument(IRI.create("file:" + "mp.owl")))
 ontset.add(manager.loadOntologyFromOntologyDocument(IRI.create("file:" + "hp.owl")))
-ont_in = manager.createOntology(IRI.create("http://aber-owl.net/phenotype-input.owl"), ontset)
+ont = manager.createOntology(IRI.create("http://aber-owl.net/phenotype-input.owl"), ontset)
 
-ont_out = manager.createOntology(IRI.create("http://aber-owl.net/phenotype.owl"))
+# ont_out = manager.createOntology(IRI.create("http://aber-owl.net/phenotype.owl"))
 onturi = "http://aber-owl.net/phenotype.owl#"
 
 fac = manager.getOWLDataFactory()
 progressMonitor = ConsoleProgressMonitor()
 config = SimpleConfiguration(progressMonitor)
 f1 = StructuralReasonerFactory()
-reasoner = f1.createReasoner(ont_in, config)
+reasoner = f1.createReasoner(ont, config)
 # reasoner.precomputeInferences(InferenceType.CLASS_HIERARCHY)
 
-generator = InferredOntologyGenerator(reasoner, [InferredSubClassAxiomGenerator()])
-generator.fillOntology(fac, ont_out)
+# generator = InferredOntologyGenerator(reasoner, [InferredSubClassAxiomGenerator()])
+# generator.fillOntology(fac, ont_out)
 
-clset = ont_in.getClassesInSignature(True)
+clset = ont.getClassesInSignature(True)
 
 # for cl in clset:
-#     for ax in EntitySearcher.getAnnotationAssertionAxioms(cl, ont_in):
+#     for ax in EntitySearcher.getAnnotationAssertionAxioms(cl, ont):
 #         manager.addAxiom(ont_out, ax)
 
 # for owl in owlfiles:
@@ -66,7 +66,7 @@ print "Building ontology..."
 #     aa = formatClassNames(x.toString())
 #     if aa not in id2class:
 #         id2class[aa] = x
-#     for lab in EntitySearcher.getAnnotationObjects(cl, ont_in, fac.getRDFSLabel()):
+#     for lab in EntitySearcher.getAnnotationObjects(cl, ont, fac.getRDFSLabel()):
 #         id2name[cl] = lab.getValue().asLiteral()
 #    
 # 
@@ -114,7 +114,7 @@ for cl in clset:
 #         centralparticipant = []
 #         resultsfrom = []
         
-        for cExpr in EntitySearcher.getEquivalentClasses(cl, ont_in): # OWL Class Expression
+        for cExpr in EntitySearcher.getEquivalentClasses(cl, ont): # OWL Class Expression
             if (not cExpr.isClassExpressionLiteral()) and cExpr.getClassExpressionType() == ClassExpressionType.OBJECT_SOME_VALUES_FROM:
                 c = cExpr
                 if c.getProperty() and c.getProperty().toString() == "<http://purl.obolibrary.org/obo/BFO_0000051>":

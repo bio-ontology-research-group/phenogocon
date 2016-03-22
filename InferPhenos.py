@@ -22,12 +22,12 @@ pheno2go = "pheno2go.txt"
 
 
 manager = OWLManager.createOWLOntologyManager()
-ont_in = manager.loadOntologyFromOntologyDocument(IRI.create("file:" + gobasic))
+ont = manager.loadOntologyFromOntologyDocument(IRI.create("file:" + gobasic))
 fac = manager.getOWLDataFactory()
 progressMonitor = ConsoleProgressMonitor()
 config = SimpleConfiguration(progressMonitor)
 f1 = ElkReasonerFactory()
-reasoner = f1.createReasoner(ont_in, config)
+reasoner = f1.createReasoner(ont, config)
 reasoner.precomputeInferences(InferenceType.CLASS_HIERARCHY)
 
 regmap = dict() # maps a 2-item list to set
@@ -41,7 +41,7 @@ nr = fac.getOWLObjectProperty(IRI.create("http://purl.obolibrary.org/obo/RO_0002
 
 # begin threading
 queue = Queue()
-for cl in ont_in.getClassesInSignature(True):
+for cl in ont.getClassesInSignature(True):
     queue.put(cl)
 #     if queue._qsize() >= 500:
 #         break
@@ -101,12 +101,12 @@ for line in open(go_annos, 'r'):
         mgi2go[mgi].add(gos)
 
 # start writing to file
-gout = open("inferred-phenos.txt", 'w')
+outlines = []
 print "Writing to inferred-phenos..."
 for mgi in mgi2go:
     for gos in mgi2go[mgi]:
         if (gos, "abnormal") in gosmap:
-            gout.write("%s\t%s\t%s\n" % (mgi, gos, gosmap[(gos, "abnormal")]))
+            outlines.append("%s\t%s\t%s\n" % (mgi, gos, gosmap[(gos, "abnormal")]))
         for i in range(2):
             direction = ["up", "down"][i]
             antidirection = ["up", "down"][1-i]
@@ -114,7 +114,11 @@ for mgi in mgi2go:
                 go2 = regmap[(gos, direction)] # gos up/down-regulates go2
                 for g2 in go2:
                     if (g2, antidirection) in gosmap: # find the decreased go2 phenotype
-                        gout.write("%s\t%s\t%s\t%s\n" % (mgi, gos, gosmap[(g2, antidirection)], antidirection))
+                        outlines.append("%s\t%s\t%s\t%s\n" % (mgi, gos, gosmap[(g2, antidirection)], antidirection))
 
-gout.close()
+outlines.sort() # output file will be in sorted order
+with open("inferred-phenos.txt", 'w') as gout:
+    for string in outlines:
+        gout.write(string)
+        
 print "Program terminated."
