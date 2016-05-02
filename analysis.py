@@ -105,18 +105,17 @@ def fypo_gene_description_pheno():
                 tabs = line.split('\t')
                 gene = tabs[2]
                 desc = tabs[9]
-#                 loc = desc.find(':')
-#                 desc = desc[:loc]
                 if gene and desc in desc2pheno: # TODO some gene ids are blank, then need to use gene name
                     g.write("%s\t%s\n" % (gene, desc2pheno[desc]))
                 elif not gene:
-                    print tabs[3]
+                    pass
                 
 
 go = "http://purl.obolibrary.org/obo/GO_"
 pheno2gofile = "pheno2go.txt"
-down = ["http://purl.obolibrary.org/obo/PATO_0000462", "http://purl.obolibrary.org/obo/PATO_0000381", "http://purl.obolibrary.org/obo/PATO_0000911", "http://purl.obolibrary.org/obo/PATO_0000297", "http://purl.obolibrary.org/obo/PATO_0001511", "http://purl.obolibrary.org/obo/PATO_0001507"]
-up = ["http://purl.obolibrary.org/obo/PATO_0000912"]
+down = ["PATO:0000462", "PATO:0000381", "PATO:0000911", "PATO:0000297", "PATO:0001511", "PATO:0001507"]
+abnormal = ["PATO:0000001"]
+up = ["PATO:0000912"]
 
 
 gene2pheno = dict() # maps gene -> {pheno}
@@ -156,14 +155,14 @@ pheno2go = dict()
 for line in open(pheno2gofile, 'r'):
     tabs = line.strip('\n').split('\t')
     pheno = formatClassNames(tabs[0])
-    gos = tabs[1].replace(go, "GO:")
+    gos = tabs[1]
     if pheno not in pheno2go:
         pheno2go[pheno] = set()
     if tabs[2] in down:
         pheno2go[pheno].add((gos, "down"))
-    if tabs[2] in up:
+    elif tabs[2] in up:
         pheno2go[pheno].add((gos, "up"))
-    if tabs[2] == "http://purl.obolibrary.org/obo/PATO_0000001": # abnormal
+    elif tabs[2] in abnormal: # abnormal
         pheno2go[pheno].add((gos, "abnormal"))
 
 
@@ -185,6 +184,9 @@ class Stats:
             for stat in self.stats[speciesname]:
                 print "%s: %d" % (stat, self.stats[speciesname][stat])
             total = sum([self.stats[speciesname][stat] for stat in self.stats[speciesname]])
+            hits = self.stats[speciesname]["correct"] + self.stats[speciesname]["correct direction"]
+            misses = self.stats[speciesname]["wrong direction"]
+            print "regulation accuracy = %d / %d = %f" % (hits, hits + misses, (hits+0.0)/(hits + misses))
             print "total: %d" % total
     
 stats1 = Stats(speciesList)
@@ -197,7 +199,7 @@ with open("inferred-phenos.txt", 'r') as f:
         tabs = line.strip('\n').split('\t')
         gene = tabs[0]
         gos = tabs[1]
-        pheno = formatClassNames(tabs[2])
+        pheno = tabs[2]
         speciesname = pheno[:pheno.find(':')]
         
         if "FBcv" in speciesname:
@@ -209,6 +211,9 @@ with open("inferred-phenos.txt", 'r') as f:
                              
             else:
                 prediction = tabs[3]
+                
+#                 if prediction == "abnormal":
+#                     continue
                     
                 regs = set()
                 for true_pheno in gene2pheno[gene]:

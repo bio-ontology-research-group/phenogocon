@@ -11,15 +11,20 @@ from threading import Thread
 
 numThreads = 48
 
-
 gobasic = "go-basic.obo"
 go = "http://purl.obolibrary.org/obo/GO_"
-down = ["http://purl.obolibrary.org/obo/PATO_0000462", "http://purl.obolibrary.org/obo/PATO_0000381", "http://purl.obolibrary.org/obo/PATO_0000911", "http://purl.obolibrary.org/obo/PATO_0000297", "http://purl.obolibrary.org/obo/PATO_0001511", "http://purl.obolibrary.org/obo/PATO_0001507"]
-abnormal = ["http://purl.obolibrary.org/obo/PATO_0000001"]
-up = ["http://purl.obolibrary.org/obo/PATO_0000912"]
+# down = ["http://purl.obolibrary.org/obo/PATO_0000462", "http://purl.obolibrary.org/obo/PATO_0000381", "http://purl.obolibrary.org/obo/PATO_0000911", "http://purl.obolibrary.org/obo/PATO_0000297", "http://purl.obolibrary.org/obo/PATO_0001511", "http://purl.obolibrary.org/obo/PATO_0001507"]
+# abnormal = ["http://purl.obolibrary.org/obo/PATO_0000001"]
+# up = ["http://purl.obolibrary.org/obo/PATO_0000912"]
 
 pheno2gofile = "pheno2go.txt"
 
+def formatClassNames(s):
+    s = s.replace("http://purl.obolibrary.org/obo/", "")
+    s = s.replace("<", "")
+    s = s.replace(">", "")
+    s = s.replace("_", ":")
+    return s
 
 manager = OWLManager.createOWLOntologyManager()
 ont = manager.loadOntologyFromOntologyDocument(IRI.create("file:" + gobasic))
@@ -77,7 +82,7 @@ def job(i, q):
         for [reg, updown] in [[pr, "up"], [nr, "down"]]:
             c = fac.getOWLObjectSomeValuesFrom(reg, cl)
             for sub in reasoner.getSubClasses(c, False).getFlattened():
-                subs = sub.toString().replace(go, "GO:").replace(">","").replace("<", "")
+                subs = formatClassNames(sub.toString())
                 if subs == "owl:Nothing":
                     continue
                 if (subs, updown) not in regmap:
@@ -101,13 +106,8 @@ print "Building go2pheno..."
 for line in open(pheno2gofile, 'r'):
     tabs = line.strip('\n').split('\t')
     pheno = tabs[0]
-    gos = tabs[1].replace(go, "GO:")
-    if tabs[2] in down:
-        go2pheno[(gos, "down")] = pheno
-    if tabs[2] in up:
-        go2pheno[(gos, "up")] = pheno
-    if tabs[2] in abnormal: # abnormal
-        go2pheno[(gos, "abnormal")] = pheno
+    gos = tabs[1]
+    go2pheno[(gos, tabs[2])] = pheno
 
 # build gene2go
 print "Building gene2go..."
