@@ -1,9 +1,11 @@
 from org.semanticweb.elk.owlapi import ElkReasonerFactory
 from org.semanticweb.owlapi.apibinding import OWLManager
 from org.semanticweb.owlapi.model import IRI, AxiomType, ClassExpressionType, OWLQuantifiedRestriction
-from org.semanticweb.owlapi.reasoner import ConsoleProgressMonitor, SimpleConfiguration, \
-    OWLReasoner
+from org.semanticweb.owlapi.reasoner import ConsoleProgressMonitor, SimpleConfiguration
 from org.semanticweb.owlapi.search import EntitySearcher
+
+from Queue import Queue
+from threading import Thread
 
 
 # from org.semanticweb.owlapi.model.parameters import Imports
@@ -12,12 +14,17 @@ down = ["PATO:0000462", "PATO:0000381", "PATO:0000911", "PATO:0000297", "PATO:00
 abnormal = ["PATO:0000001"]
 up = ["PATO:0000912"]
 
-
 manager = OWLManager.createOWLOntologyManager()
 fac = manager.getOWLDataFactory()
 
+output = []
+
+numThreads = 48
+
+
 def create_class(s):
     return fac.getOWLClass(IRI.create(s))
+
 
 def create_relation(s):
     if s == "inheres-in":
@@ -31,6 +38,7 @@ def create_relation(s):
 #         istring = "http://phenomebrowser.net/#" + s
     return fac.getOWLObjectProperty(IRI.create(istring))
 
+
 def formatClassNames(s):
     s = s.replace("http://purl.obolibrary.org/obo/","")
     s = s.replace("<","")
@@ -39,14 +47,61 @@ def formatClassNames(s):
     return s
 
 
+def rev_formatClassNames(s):
+    s = s.replace(":", "_")
+    s = "http://purl.obolibrary.org/obo/" + s
+    return s
+
+
+def job(i, q):
+    progressMonitor = ConsoleProgressMonitor()
+    config = SimpleConfiguration(progressMonitor)
+    reasoner = ElkReasonerFactory().createReasoner(ont, config)
+    while True:
+        (goclass, pato) = q.get()
+        size = q._qsize()
+        if size % 1000 == 0:
+            print "%d entries left in queue" % size
+               
+        temp = fac.getOWLObjectSomeValuesFrom(create_relation("inheres-in"), goclass)
+        temppato = fac.getOWLObjectSomeValuesFrom(create_relation("has-modifier"), create_class(rev_formatClassNames(abnormal[0])))
+        temp = fac.getOWLObjectIntersectionOf(temppato, temp)
+        temp = fac.getOWLObjectIntersectionOf(create_class(rev_formatClassNames(pato)), temp)
+        temp = fac.getOWLObjectSomeValuesFrom(create_relation("has-part"), temp)
+        
+#             print temp
+        subclasses = reasoner.getSubClasses(temp, True).getFlattened()
+#             if len(subclasses) > 1:
+#                 print goclass, pato, subclasses
+        for cl in subclasses:
+            if "Nothing" in cl.toString():
+                continue
+            if cl.toString() in closed:
+                continue
+            closed.add(cl.toString())
+            regout = ""
+            if pato in up:
+                regout = "up"
+            elif pato in down:
+                regout = "down"
+            elif pato in abnormal:
+                regout = "abnormal"
+                
+            output.append(((formatClassNames(cl.toString()), formatClassNames(goclass.toString()), regout)))
+            
+        q.task_done()
+
+
 # owlfiles = ["uberon", "go", "bspo", "zfa", "pato", "cl-basic", "nbo"]
 owlfiles = ["mp", "hp", "dpo", "fypo", "apo"]
 
 go_ont = manager.loadOntologyFromOntologyDocument(IRI.create("file:" + "go.owl"))
 pato_ont = manager.loadOntologyFromOntologyDocument(IRI.create("file:" + "pato.owl"))
 
+goset = go_ont.getClassesInSignature(True)
+print "%d GO classes" % len(goset)
+    
 # Open output file
-gout = open("pheno2go.txt", 'w')
 closed = set()
 
 for owl in owlfiles:
@@ -71,60 +126,25 @@ for owl in owlfiles:
     
     # clset = ont.getClassesInSignature(True)
     
-    old = -1
-    goset = go_ont.getClassesInSignature(True)
-    queue = []
-    print "%d GO classes" % len(goset)
+    queue = Queue()
+    
     counter = 0
-    print "Creating query axioms"
-    for goclass in goset:
-        if counter % 10000 == 0:
-            print counter
-            
+    print "Checking query subclasses for %s..." % owl
+    for goclass in goset:   
         for pato in (up + down + abnormal):
-            temp = fac.getOWLObjectSomeValuesFrom(create_relation("inheres-in"), goclass)
-            temppato = fac.getOWLObjectSomeValuesFrom(create_relation("has-modifier"), create_class(pato))
-            temp = fac.getOWLObjectIntersectionOf(temppato, temp)
-            temp = fac.getOWLObjectSomeValuesFrom(create_relation("has-part"), temp)
+            queue.put((goclass, pato))
             
-            newName = fac.getOWLClass(IRI.create("temp%d" % counter))
-            definition = fac.getOWLEquivalentClassesAxiom(newName, temp)
-            manager.addAxiom(ont, definition)
-            
-            queue.append((goclass, create_class(pato), newName))
-            
-        counter += 1
+    print "Queue built. There are %d classes to process." % queue._qsize()
     
-    # refresh reasoner
-    reasoner.flush()
+    # initiate threads
+    for i in range(numThreads):
+        print "Thread %d initiated" % (i+1)
+        t = Thread(target=job, args=(i, queue))
+        t.setDaemon(True)
+        t.start()
     
-    print "Now computing subclasses"
-    print "%d queries to make" % len(queue)
-    counter = 0
-    for (goclass, pato, newName) in queue:
-        if counter % 10000 == 0:
-            print counter
-        subclasses = reasoner.getSubClasses(newName, False).getFlattened()
-        if len(subclasses) != 281:
-            for cl in subclasses:
-                if "temp" in cl.toString():
-                    continue
-                if "Nothing" in cl.toString():
-                    continue
-                if cl.toString() in closed:
-                    continue
-                closed.add(cl.toString())
-                reg = formatClassNames(pato.toString())
-                regout = ""
-                if reg in up:
-                    regout = "up"
-                elif reg in down:
-                    regout = "down"
-                elif reg in abnormal:
-                    regout = "abnormal"
-                gout.write("%s\t%s\t%s\n" % (formatClassNames(cl.toString()), formatClassNames(goclass.toString()), regout))
-        
-        counter += 1
+    # wait for threads to finish
+    queue.join()
 
 # print "%d classes to process" % len(clset)
 # for cl in clset:
@@ -172,6 +192,9 @@ for owl in owlfiles:
 #     else:
 #         pass
 #         print cl.toString()
-gout.close()
+
+with open("pheno2go.txt", 'w') as gout:
+    for triplet in output:
+        gout.write("%s\t%s\t%s\n" % triplet)
 
 print "Program terminated."

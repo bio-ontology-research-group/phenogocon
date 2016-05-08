@@ -186,7 +186,8 @@ class Stats:
             total = sum([self.stats[speciesname][stat] for stat in self.stats[speciesname]])
             hits = self.stats[speciesname]["correct"] + self.stats[speciesname]["correct direction"]
             misses = self.stats[speciesname]["wrong direction"]
-            print "regulation accuracy = %d / %d = %f" % (hits, hits + misses, (hits+0.0)/(hits + misses))
+            if hits + misses > 0:
+                print "regulation accuracy = %d / %d = %f" % (hits, hits + misses, (hits+0.0)/(hits + misses))
             print "total: %d" % total
     
 stats1 = Stats(speciesList)

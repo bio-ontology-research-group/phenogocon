@@ -8,6 +8,7 @@ from org.semanticweb.owlapi.reasoner import ConsoleProgressMonitor, \
     
 from Queue import Queue
 from threading import Thread
+import os
 
 numThreads = 48
 
@@ -65,12 +66,6 @@ print "Building regmap..."
 pr = fac.getOWLObjectProperty(IRI.create("http://purl.obolibrary.org/obo/RO_0002213"))
 nr = fac.getOWLObjectProperty(IRI.create("http://purl.obolibrary.org/obo/RO_0002212"))
 
-# begin threading
-queue = Queue()
-for cl in ont.getClassesInSignature(True):
-    queue.put(cl)
-print "Queue built. There are %d classes to process." % queue._qsize()
-
 def job(i, q):
     while True:
         cl = q.get()
@@ -91,15 +86,34 @@ def job(i, q):
                 
         q.task_done()
 
-# initiate threads
-for i in range(numThreads):
-    print "Thread %d initiated" % (i+1)
-    t = Thread(target=job, args=(i, queue))
-    t.setDaemon(True)
-    t.start()
-
-# wait for threads to finish
-queue.join()
+if os.path.isfile("regmap_data.txt"):
+    with open("regmap_data.txt", 'r') as f:
+        (subs, updown, clstring) = f.readline().split('\t')
+        if (subs, updown) not in regmap:
+            regmap[(subs, updown)] = set()
+        regmap[(subs, updown)].add(clstring)
+else:
+    # begin threading
+    queue = Queue()
+    for cl in ont.getClassesInSignature(True):
+        queue.put(cl)
+    print "Queue built. There are %d classes to process." % queue._qsize()
+    
+    # initiate threads
+    for i in range(numThreads):
+        print "Thread %d initiated" % (i+1)
+        t = Thread(target=job, args=(i, queue))
+        t.setDaemon(True)
+        t.start()
+    
+    # wait for threads to finish
+    queue.join()
+    
+    # write to text file, next time we can just load data from text file
+    with open("regmap_data.txt", 'w') as g:
+        for (subs, updown) in regmap:
+            for clstring in regmap[(subs, updown)]:
+                g.write("%s\t%s\t%s\n" % (subs, updown, clstring))
 
 # build go2pheno
 print "Building go2pheno..."
