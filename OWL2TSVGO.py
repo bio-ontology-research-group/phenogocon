@@ -7,12 +7,20 @@ from org.semanticweb.owlapi.search import EntitySearcher
 from Queue import Queue
 from threading import Thread
 
-
 # from org.semanticweb.owlapi.model.parameters import Imports
 # from org.semanticweb.owlapi.reasoner.structural import StructuralReasonerFactory
-down = ["PATO:0000462", "PATO:0000381", "PATO:0000911", "PATO:0000297", "PATO:0001511", "PATO:0001507"]
-abnormal = ["PATO:0000001"]
+
+# quality = ["PATO:0000001"]
+# down = ["PATO:0002301", "PATO:0000462", "PATO:0000381", "PATO:0000911", "PATO:0000297", "PATO:0001511", "PATO:0001507", "PATO:0001552", "PATO:0001783", "PATO:0001997", "PATO:0002018"]
+# up = ["PATO:0000380", "PATO:0000470", "PATO:0000912", "PATO:0001551", "PATO:0001782", "PATO:0002017", "PATO:0002300"]
+# abnormal = ["PATO:0000460"]
+# fypo_pheno = "FYPO:0000001"
+
+quality = ["PATO:0000001"]
+abnormal = ["PATO:0000460"]
+down = ["PATO:0000297", "PATO:0000381", "PATO:0000462", "PATO:0000911", "PATO:0001507", "PATO:0001511"]
 up = ["PATO:0000912"]
+fypo_pheno = "FYPO:0000001"
 
 manager = OWLManager.createOWLOntologyManager()
 fac = manager.getOWLDataFactory()
@@ -33,6 +41,8 @@ def create_relation(s):
         istring = "http://purl.obolibrary.org/obo/BFO_0000051"
     elif s == "has-modifier":
         istring = "http://purl.obolibrary.org/obo/RO_0002573"
+    elif s == "inheres-in-part-of":
+        istring = "http://purl.obolibrary.org/obo/RO_0002314"
     else:
         raise Exception
 #         istring = "http://phenomebrowser.net/#" + s
@@ -53,47 +63,79 @@ def rev_formatClassNames(s):
     return s
 
 
-def job(i, q):
+def job(i, q, owl, ont):
+    global closed
     progressMonitor = ConsoleProgressMonitor()
     config = SimpleConfiguration(progressMonitor)
     reasoner = ElkReasonerFactory().createReasoner(ont, config)
     while True:
-        (goclass, pato) = q.get()
+        goclass = q.get()
         size = q._qsize()
         if size % 1000 == 0:
             print "%d entries left in queue" % size
-               
-        temp = fac.getOWLObjectSomeValuesFrom(create_relation("inheres-in"), goclass)
-        temppato = fac.getOWLObjectSomeValuesFrom(create_relation("has-modifier"), create_class(rev_formatClassNames(abnormal[0])))
-        temp = fac.getOWLObjectIntersectionOf(temppato, temp)
-        temp = fac.getOWLObjectIntersectionOf(create_class(rev_formatClassNames(pato)), temp)
-        temp = fac.getOWLObjectSomeValuesFrom(create_relation("has-part"), temp)
-        
-#             print temp
-        subclasses = reasoner.getSubClasses(temp, True).getFlattened()
-#             if len(subclasses) > 1:
-#                 print goclass, pato, subclasses
-        for cl in subclasses:
-            if "Nothing" in cl.toString():
-                continue
-            if cl.toString() in closed:
-                continue
-            closed.add(cl.toString())
-            regout = ""
-            if pato in up:
-                regout = "up"
-            elif pato in down:
-                regout = "down"
-            elif pato in abnormal:
-                regout = "abnormal"
-                
-            output.append(((formatClassNames(cl.toString()), formatClassNames(goclass.toString()), regout)))
             
+        if owl in ["mp", "hp"]:
+            temp = fac.getOWLObjectSomeValuesFrom(create_relation("inheres-in"), goclass)
+            temppato = fac.getOWLObjectSomeValuesFrom(create_relation("has-modifier"), create_class(rev_formatClassNames(abnormal[0])))
+            temp = fac.getOWLObjectIntersectionOf(temppato, temp)
+            
+            temp1 = fac.getOWLObjectIntersectionOf(create_class(rev_formatClassNames(quality[0])), temp)
+            query = fac.getOWLObjectSomeValuesFrom(create_relation("has-part"), temp1)
+            
+        elif owl == "fypo":
+            temp = fac.getOWLObjectSomeValuesFrom(create_relation("inheres-in-part-of"), goclass)
+            query = fac.getOWLObjectIntersectionOf(temp, create_class(rev_formatClassNames(quality[0])))
+            
+        subclasses = reasoner.getSubClasses(query, True).getFlattened()
+        if len(subclasses) > 1:
+            for cl in subclasses:
+                if any([x in cl.toString() for x in ["Nothing", "GO"]]):
+                    continue
+                pato, regout = "", ""
+                
+                done = False
+                for c in EntitySearcher.getEquivalentClasses(cl, ont): # OWL Class Expression
+                    if c.isClassExpressionLiteral():
+                        continue
+
+                    if c.getClassExpressionType() == ClassExpressionType.OBJECT_SOME_VALUES_FROM:
+                        if c.getProperty() and c.getProperty().toString() == "<http://purl.obolibrary.org/obo/BFO_0000051>":
+                            ctemp = c.getFiller().asConjunctSet()
+                            for conj in ctemp:
+                                if conj.isClassExpressionLiteral():
+                                    pato = formatClassNames(conj.toString())
+                                    done = True
+                                    break
+                    elif c.getClassExpressionType() == ClassExpressionType.OBJECT_INTERSECTION_OF:
+                        ctemp = c.asConjunctSet()
+                        for x in ctemp:
+                            if x.getClassExpressionType() == ClassExpressionType.OBJECT_SOME_VALUES_FROM and x.getProperty().toString() == "<http://purl.obolibrary.org/obo/fypo#qualifier>":
+                                ctemp2 = x.getFiller().asConjunctSet()
+                                for conj in ctemp2:
+                                    if conj.isClassExpressionLiteral():
+                                        pato = formatClassNames(conj.toString())
+                                        done = True
+                                        break
+                            if done:
+                                break
+                    if done:
+                        break
+                
+                if pato in up:
+                    regout = "up"
+                elif pato in down:
+                    regout = "down"
+                elif pato in quality + abnormal:
+                    regout = "abnormal"
+                
+                if regout:    
+                    output.append(((formatClassNames(cl.toString()), formatClassNames(goclass.toString()), regout)))
+    
         q.task_done()
 
 
-# owlfiles = ["uberon", "go", "bspo", "zfa", "pato", "cl-basic", "nbo"]
-owlfiles = ["mp", "hp", "dpo", "fypo", "apo"]
+# owlfiles = ["mp", "hp", "dpo", "fypo", "apo"]
+owlfiles = ["mp", "hp", "fypo"]
 
 go_ont = manager.loadOntologyFromOntologyDocument(IRI.create("file:" + "go.owl"))
 pato_ont = manager.loadOntologyFromOntologyDocument(IRI.create("file:" + "pato.owl"))
@@ -111,90 +153,32 @@ for owl in owlfiles:
     ontset.add(pato_ont)
     
     ont = manager.createOntology(IRI.create("http://aber-owl.net/phenotype-input-%s.owl" % owl), ontset)
-    # ontset = set()
-    # for (owl, prefix) in owlfiles:
-    #     print "Processing " + owl
-    #     ontset.add(manager.loadOntologyFromOntologyDocument(IRI.create("file:" + owl + ".owl")))
-    # ontset.add(manager.loadOntologyFromOntologyDocument(IRI.create("file:" + "go.owl")))
-    # ontset.add(manager.loadOntologyFromOntologyDocument(IRI.create("file:" + "pato.owl")))
-    # ont = manager.createOntology(IRI.create("http://aber-owl.net/phenotype-input.owl"), ontset)
     
     progressMonitor = ConsoleProgressMonitor()
     config = SimpleConfiguration(progressMonitor)
-    # f1 = StructuralReasonerFactory()
     reasoner = ElkReasonerFactory().createReasoner(ont, config)
-    
-    # clset = ont.getClassesInSignature(True)
     
     queue = Queue()
     
     counter = 0
     print "Checking query subclasses for %s..." % owl
-    for goclass in goset:   
-        for pato in (up + down + abnormal):
-            queue.put((goclass, pato))
+    for goclass in goset:
+        queue.put(goclass)
             
     print "Queue built. There are %d classes to process." % queue._qsize()
     
     # initiate threads
     for i in range(numThreads):
         print "Thread %d initiated" % (i+1)
-        t = Thread(target=job, args=(i, queue))
+        t = Thread(target=job, args=(i, queue, owl, ont))
         t.setDaemon(True)
         t.start()
     
     # wait for threads to finish
     queue.join()
 
-# print "%d classes to process" % len(clset)
-# for cl in clset:
-#     s = cl.toString()
-#     if any([prefix in s for (owl, prefix) in owlfiles]) or "FBbt" in s:
-#         q = []
-#         e = []
-#         
-#         for cExpr in EntitySearcher.getEquivalentClasses(cl, ont): # OWL Class Expression
-#             
-#             if (not cExpr.isClassExpressionLiteral()) and cExpr.getClassExpressionType() in (ClassExpressionType.OBJECT_SOME_VALUES_FROM, ClassExpressionType.OBJECT_INTERSECTION_OF):
-#                 c = cExpr
-#                 print cl.toString(), cExpr.toString()
-#                 ctemp = []
-#                 if c.getClassExpressionType() == ClassExpressionType.OBJECT_SOME_VALUES_FROM and c.getProperty().toString() == "<http://purl.obolibrary.org/obo/BFO_0000051>":  # has-part
-#                     ctemp = c.getFiller().asConjunctSet()
-#                 elif c.getClassExpressionType() == ClassExpressionType.OBJECT_INTERSECTION_OF:
-#                     ctemp = c.asConjunctSet()
-# #                     for x in c.asConjunctSet():
-# #                         if x.getClassExpressionType() == ClassExpressionType.OBJECT_SOME_VALUES_FROM and x.getProperty().toString() == "<http://purl.obolibrary.org/obo/BFO_0000051>":
-# #                         ctemp += x.getFiller().asConjunctSet()
-# #                             print ctemp
-#                 for conj in ctemp:
-#                     if conj.isClassExpressionLiteral():
-#                         q.append(conj)
-#                     elif conj.getClassExpressionType() == ClassExpressionType.OBJECT_SOME_VALUES_FROM:
-# #                             conj = OWLQuantifiedRestriction(conj) 
-# #                             
-#                         if conj.getProperty().toString() == "<http://purl.obolibrary.org/obo/RO_0000052>": # inheres-in
-#                             e.append(conj.getFiller())
-# 
-#         
-#         scl, sgo, spheno = cl.toString(), "", ""
-#         scl = scl[1:len(scl)-1]
-#         if e:
-#             estring = e[0].toString()
-#             pos = estring.find('<')
-#             pos1 = estring.find('>')
-#             sgo = estring[pos + 1:pos1]
-#         if q:
-#             spheno = q[0].toString()
-#             spheno = spheno[1:len(spheno)-1]
-#         if sgo and spheno:
-#             gout.write("%s\t%s\t%s\n" % (scl, sgo, spheno))
-#     else:
-#         pass
-#         print cl.toString()
-
 with open("pheno2go.txt", 'w') as gout:
-    for triplet in output:
-        gout.write("%s\t%s\t%s\n" % triplet)
+    for triple in output:
+        gout.write("%s\t%s\t%s\n" % triple)
 
 print "Program terminated."

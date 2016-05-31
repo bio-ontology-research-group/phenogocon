@@ -30,12 +30,11 @@ def formatClassNames(s):
 manager = OWLManager.createOWLOntologyManager()
 ont = manager.loadOntologyFromOntologyDocument(IRI.create("file:" + gobasic))
 fac = manager.getOWLDataFactory()
-progressMonitor = ConsoleProgressMonitor()
-config = SimpleConfiguration(progressMonitor)
-f1 = ElkReasonerFactory()
-reasoner = f1.createReasoner(ont, config)
-reasoner.precomputeInferences(InferenceType.CLASS_HIERARCHY)
-
+# progressMonitor = ConsoleProgressMonitor()
+# config = SimpleConfiguration(progressMonitor)
+# f1 = ElkReasonerFactory()
+# reasoner = f1.createReasoner(ont, config)
+# reasoner.precomputeInferences(InferenceType.CLASS_HIERARCHY)
 
 regmap = dict() # maps a 2-item list to set   e.g. [cl1, "down"]:{cl2, cl3, cl4}    cl1 down-regulates cl2, cl3 and cl4
 go2pheno = dict() # maps a 2-item list to a string
@@ -67,16 +66,21 @@ pr = fac.getOWLObjectProperty(IRI.create("http://purl.obolibrary.org/obo/RO_0002
 nr = fac.getOWLObjectProperty(IRI.create("http://purl.obolibrary.org/obo/RO_0002212"))
 
 def job(i, q):
+    progressMonitor = ConsoleProgressMonitor()
+    config = SimpleConfiguration(progressMonitor)
+    f1 = ElkReasonerFactory()
+    reasoner = f1.createReasoner(ont, config)
+    reasoner.precomputeInferences(InferenceType.CLASS_HIERARCHY)
     while True:
         cl = q.get()
         size = q._qsize()
         if size % 1000 == 0:
             print "%d entries left in queue" % size
                 
-        clstring = cl.toString().replace(go, "GO:").replace(">","").replace("<", "")
+        clstring = formatClassNames(cl.toString())
         for [reg, updown] in [[pr, "up"], [nr, "down"]]:
             c = fac.getOWLObjectSomeValuesFrom(reg, cl)
-            for sub in reasoner.getSubClasses(c, False).getFlattened():
+            for sub in reasoner.getSubClasses(c, True).getFlattened():
                 subs = formatClassNames(sub.toString())
                 if subs == "owl:Nothing":
                     continue
@@ -88,11 +92,12 @@ def job(i, q):
 
 if os.path.isfile("regmap_data.txt"):
     with open("regmap_data.txt", 'r') as f:
-        (subs, updown, clstring) = f.readline().split('\t')
-        if (subs, updown) not in regmap:
-            regmap[(subs, updown)] = set()
-        regmap[(subs, updown)].add(clstring)
-else:
+        for line in f:
+            (subs, updown, clstring) = line.strip().split('\t')
+            if (subs, updown) not in regmap:
+                regmap[(subs, updown)] = set()
+            regmap[(subs, updown)].add(clstring)
+else: # delete regmap data in order to rebuild map
     # begin threading
     queue = Queue()
     for cl in ont.getClassesInSignature(True):
@@ -121,7 +126,10 @@ for line in open(pheno2gofile, 'r'):
     tabs = line.strip('\n').split('\t')
     pheno = tabs[0]
     gos = tabs[1]
-    go2pheno[(gos, tabs[2])] = pheno
+    reg = tabs[2]
+    if (gos, reg) not in go2pheno:
+        go2pheno[(gos, reg)] = set()
+    go2pheno[(gos, reg)].add(pheno)
 
 # build gene2go
 print "Building gene2go..."
@@ -137,13 +145,14 @@ for species in speciesList:
                 gene2go[gene] = set()
             gene2go[gene].add(gos)
 
-# start writing to file
-outlines = []
-print "Writing to inferred-phenos..."
+# infer
+outlines = set()
+print "Making inferences..."
 for gene in gene2go:
     for gos in gene2go[gene]:
         if (gos, "abnormal") in go2pheno:
-            outlines.append("%s\t%s\t%s\t%s\n" % (gene, gos, go2pheno[(gos, "abnormal")], "abnormal"))
+            for pheno in go2pheno[(gos, "abnormal")]:
+                outlines.add("%s\t%s\t%s\t%s\t%s\n" % (gene, pheno, "abnormal", gos, "NONE"))
         for i in range(2):
             direction = ["up", "down"][i]
             antidirection = ["up", "down"][1-i]
@@ -151,11 +160,32 @@ for gene in gene2go:
                 go2 = regmap[(gos, direction)] # gos up/down-regulates go2
                 for g2 in go2:
                     if (g2, antidirection) in go2pheno: # find the decreased go2 phenotype
-                        outlines.append("%s\t%s\t%s\t%s\n" % (gene, gos, go2pheno[(g2, antidirection)], antidirection))
-
-outlines.sort() # output file will be in sorted order
+                        for pheno in go2pheno[(g2, antidirection)]:
+                            outlines.add("%s\t%s\t%s\t%s\t%s\n" % (gene, pheno, antidirection, gos, g2))
+                            
+print "%d inferences made. Writing to file..." % len(outlines)
 with open("inferred-phenos.txt", 'w') as gout:
     for string in outlines:
+        gout.write(string)
+        
+# negated inferences
+negoutlines = set()
+print "Making negated inferences..."
+for gene in gene2go:
+    for gos in gene2go[gene]:
+        for i in range(2):
+            direction = ["up", "down"][i]
+            antidirection = ["up", "down"][1-i]
+            if (gos, direction) in regmap:
+                go2 = regmap[(gos, direction)] # gos up/down-regulates go2
+                for g2 in go2:
+                    if (g2, direction) in go2pheno: # find the decreased go2 phenotype. Negate
+                        for pheno in go2pheno[(g2, direction)]:
+                            negoutlines.add("%s\t%s\t%s\t%s\t%s\n" % (gene, pheno, direction, gos, g2))
+                            
+print "%d negated inferences made. Writing to file..." % len(negoutlines)
+with open("neg-inferred-phenos.txt", 'w') as gout:
+    for string in negoutlines:
         gout.write(string)
         
 print "Program terminated."

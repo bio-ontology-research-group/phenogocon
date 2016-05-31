@@ -15,9 +15,9 @@ ontset.add(manager.loadOntologyFromOntologyDocument(IRI.create("file:" + "hp.owl
 ontset.add(manager.loadOntologyFromOntologyDocument(IRI.create("file:" + "fypo.owl")))
 ont = manager.createOntology(IRI.create("http://aber-owl.net/phenotype-input.owl"), ontset)
 
-progressMonitor = ConsoleProgressMonitor();
-config = SimpleConfiguration(progressMonitor);
-reasoner = ElkReasonerFactory().createReasoner(ont, config);
+progressMonitor = ConsoleProgressMonitor()
+config = SimpleConfiguration(progressMonitor)
+reasoner = ElkReasonerFactory().createReasoner(ont, config)
 
 
 class Species:
@@ -34,6 +34,7 @@ speciesList = []
 speciesList.append(Species("MP", "MGI_GenePheno.rpt", (6, 4)))
 speciesList.append(Species("HP", "HP_genepheno.tab", (0, 1)))
 speciesList.append(Species("FYPO", "FYPO_genepheno.tab", (0, 1)))
+speciesnames = ["MP", "HP", "FYPO"]
 
 def create_class(s):
     return factory.getOWLClass(IRI.create(s))
@@ -44,6 +45,13 @@ def formatClassNames(s):
     s = s.replace(">","")
     s = s.replace("_",":")
     return s
+
+
+def rev_formatClassNames(s):
+    s = s.replace(":", "_")
+    s = "http://purl.obolibrary.org/obo/" + s
+    return s
+
 
 def hp_gene_mim_pheno():
     # uses the omim data to create a database of genes and phenos for HP, without the mim    
@@ -117,7 +125,6 @@ down = ["PATO:0000462", "PATO:0000381", "PATO:0000911", "PATO:0000297", "PATO:00
 abnormal = ["PATO:0000001"]
 up = ["PATO:0000912"]
 
-
 gene2pheno = dict() # maps gene -> {pheno}
 print "Building gene2pheno"
 for species in speciesList:
@@ -140,15 +147,8 @@ for species in speciesList:
             if gene not in gene2pheno:
                 gene2pheno[gene] = set()
             gene2pheno[gene].add(pheno)
-            iri = "http://purl.obolibrary.org/obo/" + pheno.replace(":", "_")
-            mpclass = create_class(iri)
-            subclasses = reasoner.getSubClasses(mpclass, False).getFlattened()
-            for subcl in subclasses:
-                entry = subcl.toString()
-                if species.name in entry:
-                    gene2pheno[gene].add(formatClassNames(entry))
+
     
-  
 # build pheno2go
 print "Building pheno2go..."
 pheno2go = dict()
@@ -172,7 +172,7 @@ class Stats:
         self.stats = dict()
         for species in speciesList:
             self.stats[species.name] = dict()
-            for stat in ["correct", "correct direction", "wrong direction", "unknown"]:
+            for stat in ["consistent", "consistent up/down", "inconsistent up/down", "total"]:
                 self.stats[species.name][stat] = 0
             
     def increment(self, speciesname, stat):
@@ -183,65 +183,114 @@ class Stats:
             print "\nSpecies %s:" % speciesname
             for stat in self.stats[speciesname]:
                 print "%s: %d" % (stat, self.stats[speciesname][stat])
-            total = sum([self.stats[speciesname][stat] for stat in self.stats[speciesname]])
-            hits = self.stats[speciesname]["correct"] + self.stats[speciesname]["correct direction"]
-            misses = self.stats[speciesname]["wrong direction"]
+            hits = self.stats[speciesname]["consistent up/down"]
+            misses = self.stats[speciesname]["inconsistent up/down"]
             if hits + misses > 0:
-                print "regulation accuracy = %d / %d = %f" % (hits, hits + misses, (hits+0.0)/(hits + misses))
-            print "total: %d" % total
+                print "accuracy = %d / %d = %f" % (hits, hits + misses, (hits+0.0)/(hits + misses))
+            print "unknown: %d" % (self.stats[speciesname]["total"] - self.stats[speciesname]["consistent"])
     
 stats1 = Stats(speciesList)
 
-
+openset = set()
+closed = set()
+mflag, hflag, fflag = False, False, False
 # read and compare inferred phenos with database data
 print "Reading inferred phenos"
 with open("inferred-phenos.txt", 'r') as f:
     for line in f:
         tabs = line.strip('\n').split('\t')
         gene = tabs[0]
-        gos = tabs[1]
-        pheno = tabs[2]
-        speciesname = pheno[:pheno.find(':')]
+        pheno = tabs[1]
+        direction = tabs[2]
+        go1 = tabs[3]
+        go2 = tabs[4]
         
-        if "FBcv" in speciesname:
+        speciesname = pheno[:pheno.find(':')]
+        if speciesname not in speciesnames:
             continue
-                
-        if gene in gene2pheno:
-            if pheno in gene2pheno[gene]:
-                stats1.increment(speciesname, "correct")
-                             
-            else:
-                prediction = tabs[3]
-                
-#                 if prediction == "abnormal":
-#                     continue
-                    
-                regs = set()
-                for true_pheno in gene2pheno[gene]:
-                    if true_pheno not in pheno2go:
-                        continue
-                    for (x, reg) in pheno2go[true_pheno]:
-                        regs.add(reg)
-                        
-                if len(regs) == 0:
-#                     print "No direction - ", gene, gos, pheno, prediction
-                    stats1.increment(speciesname, "unknown")
-                    
-                elif len(regs) == 1:
-                    reg = regs.pop()
-                    if reg == prediction:
-                        stats1.increment(speciesname, "correct direction")
-#                         print "correct direction - ", gene, gos, pheno, prediction, reg
-                    else:
-                        stats1.increment(speciesname, "wrong direction")
-                        
-                elif len(regs) >= 2:
-#                     print "Multiple directions - ", gene, gos, pheno, prediction, regs
-                    stats1.increment(speciesname, "unknown")
+        
+        if direction == "abnormal":
+            gotemp = (gene, go1, "abnormal")
         else:
-            stats1.increment(speciesname, "unknown")
-#             print "unknown - ", gene, gos, pheno
+            gotemp = (gene, go2)
+        if gotemp in closed:
+            continue
+        
+        if gotemp not in openset:
+            openset.add(gotemp)
+            stats1.increment(speciesname, "total")
+        
+        if gene in gene2pheno:
+            phenoclass = create_class(rev_formatClassNames(pheno))
+            subclasses = reasoner.getSubClasses(phenoclass, False).getFlattened()
+            for subpheno in subclasses:
+                if formatClassNames(subpheno.toString()) in gene2pheno[gene]:
+                    stats1.increment(speciesname, "consistent")
+                    
+                    if speciesname == "MP" and not mflag:
+                        mflag = True
+                        print line
+                        
+                    if speciesname == "HP" and not hflag:
+                        hflag = True
+                        print line
+                        
+                    if speciesname == "FYPO" and not fflag:
+                        fflag = True
+                        print line
+                    
+                    if go2 != "NONE":
+                        stats1.increment(speciesname, "consistent up/down")
+                    closed.add(gotemp)
+                    break
 
+closed = set()
+
+mflag, hflag, fflag = False, False, False
+
+print "Reading negated inferred phenos"
+with open("neg-inferred-phenos.txt", 'r') as f:
+    for line in f:
+        tabs = line.strip('\n').split('\t')
+        gene = tabs[0]
+        pheno = tabs[1]
+        direction = tabs[2]
+        go1 = tabs[3]
+        go2 = tabs[4]
+        
+        if direction == "abnormal":
+            continue
+        else:
+            gotemp = (gene, go2)
+        if gotemp in closed:
+            continue
+        
+        speciesname = pheno[:pheno.find(':')]
+        if speciesname not in speciesnames:
+            continue   
+             
+        if gene in gene2pheno:
+            phenoclass = create_class(rev_formatClassNames(pheno))
+            subclasses = reasoner.getSubClasses(phenoclass, False).getFlattened()
+            for subpheno in subclasses:
+                if formatClassNames(subpheno.toString()) in gene2pheno[gene]:
+                    
+                    if speciesname == "MP" and not mflag:
+                        mflag = True
+                        print line
+                        
+                    if speciesname == "HP" and not hflag:
+                        hflag = True
+                        print line
+                        
+                    if speciesname == "FYPO" and not fflag:
+                        fflag = True
+                        print line
+                    
+                    stats1.increment(speciesname, "inconsistent up/down")
+                    closed.add(gotemp)
+                    break
+        
 stats1.printStats()
     
 print "\nProgram terminated"
