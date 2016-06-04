@@ -25,6 +25,8 @@ fypo_pheno = "FYPO:0000001"
 manager = OWLManager.createOWLOntologyManager()
 fac = manager.getOWLDataFactory()
 
+# owlfiles = ["mp", "hp", "dpo", "fypo", "apo"]
+owlfiles = ["mp"] #, "hp", "fypo"]
 output = []
 
 numThreads = 48
@@ -74,20 +76,28 @@ def job(i, q, owl, ont):
         if size % 1000 == 0:
             print "%d entries left in queue" % size
             
-        if owl in ["mp", "hp"]:
-            temp = fac.getOWLObjectSomeValuesFrom(create_relation("inheres-in"), goclass)
-            temppato = fac.getOWLObjectSomeValuesFrom(create_relation("has-modifier"), create_class(rev_formatClassNames(abnormal[0])))
-            temp = fac.getOWLObjectIntersectionOf(temppato, temp)
+#         if "0006915" not in goclass.toString():
+#             q.task_done
+#             continue    
+        
+        for inhere in ["inheres-in", "inheres-in-part-of"]:
+        
+            if owl in ["mp", "hp"]:
+                temp = fac.getOWLObjectSomeValuesFrom(create_relation(inhere), goclass)
+                temppato = fac.getOWLObjectSomeValuesFrom(create_relation("has-modifier"), create_class(rev_formatClassNames(abnormal[0])))
+                temp = fac.getOWLObjectIntersectionOf(temppato, temp)
+                
+                temp1 = fac.getOWLObjectIntersectionOf(create_class(rev_formatClassNames(quality[0])), temp)
+                query = fac.getOWLObjectSomeValuesFrom(create_relation("has-part"), temp1)
+                
+            elif owl == "fypo":
+                temp = fac.getOWLObjectSomeValuesFrom(create_relation(inhere), goclass)
+                query = fac.getOWLObjectIntersectionOf(temp, create_class(rev_formatClassNames(quality[0])))
             
-            temp1 = fac.getOWLObjectIntersectionOf(create_class(rev_formatClassNames(quality[0])), temp)
-            query = fac.getOWLObjectSomeValuesFrom(create_relation("has-part"), temp1)
-            
-        elif owl == "fypo":
-            temp = fac.getOWLObjectSomeValuesFrom(create_relation("inheres-in-part-of"), goclass)
-            query = fac.getOWLObjectIntersectionOf(temp, create_class(rev_formatClassNames(quality[0])))
-            
-        subclasses = reasoner.getSubClasses(query, True).getFlattened()
-        if len(subclasses) > 1:
+            subclasses = reasoner.getSubClasses(query, False).getFlattened()
+    #         if "0006915" in goclass.toString():
+    #             print query
+    #             print subclasses
             for cl in subclasses:
                 if any([x in cl.toString() for x in ["Nothing", "GO"]]):
                     continue
@@ -97,7 +107,7 @@ def job(i, q, owl, ont):
                 for c in EntitySearcher.getEquivalentClasses(cl, ont): # OWL Class Expression
                     if c.isClassExpressionLiteral():
                         continue
-
+    
                     if c.getClassExpressionType() == ClassExpressionType.OBJECT_SOME_VALUES_FROM:
                         if c.getProperty() and c.getProperty().toString() == "<http://purl.obolibrary.org/obo/BFO_0000051>":
                             ctemp = c.getFiller().asConjunctSet()
@@ -127,15 +137,14 @@ def job(i, q, owl, ont):
                     regout = "down"
                 elif pato in quality + abnormal:
                     regout = "abnormal"
+    #             elif pato == "":
+    #                 print cl.toString()
                 
                 if regout:    
                     output.append(((formatClassNames(cl.toString()), formatClassNames(goclass.toString()), regout)))
     
         q.task_done()
 
-
-# owlfiles = ["mp", "hp", "dpo", "fypo", "apo"]
-owlfiles = ["mp", "hp", "fypo"]
 
 go_ont = manager.loadOntologyFromOntologyDocument(IRI.create("file:" + "go.owl"))
 pato_ont = manager.loadOntologyFromOntologyDocument(IRI.create("file:" + "pato.owl"))

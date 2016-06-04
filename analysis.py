@@ -209,10 +209,7 @@ with open("inferred-phenos.txt", 'r') as f:
         if speciesname not in speciesnames:
             continue
         
-        if direction == "abnormal":
-            gotemp = (gene, go1, "abnormal")
-        else:
-            gotemp = (gene, go2)
+        gotemp = (gene, go1)
         if gotemp in closed:
             continue
         
@@ -222,7 +219,7 @@ with open("inferred-phenos.txt", 'r') as f:
         
         if gene in gene2pheno:
             phenoclass = create_class(rev_formatClassNames(pheno))
-            subclasses = reasoner.getSubClasses(phenoclass, False).getFlattened()
+            subclasses = [phenoclass]#reasoner.getSubClasses(phenoclass, False).getFlattened()
             for subpheno in subclasses:
                 if formatClassNames(subpheno.toString()) in gene2pheno[gene]:
                     stats1.increment(speciesname, "consistent")
@@ -258,20 +255,17 @@ with open("neg-inferred-phenos.txt", 'r') as f:
         go1 = tabs[3]
         go2 = tabs[4]
         
-        if direction == "abnormal":
-            continue
-        else:
-            gotemp = (gene, go2)
-        if gotemp in closed:
-            continue
-        
         speciesname = pheno[:pheno.find(':')]
         if speciesname not in speciesnames:
-            continue   
+            continue
+        
+        gotemp = (gene, go1)
+        if gotemp in closed:
+            continue  
              
         if gene in gene2pheno:
             phenoclass = create_class(rev_formatClassNames(pheno))
-            subclasses = reasoner.getSubClasses(phenoclass, False).getFlattened()
+            subclasses = [phenoclass]#reasoner.getSubClasses(phenoclass, False).getFlattened()
             for subpheno in subclasses:
                 if formatClassNames(subpheno.toString()) in gene2pheno[gene]:
                     

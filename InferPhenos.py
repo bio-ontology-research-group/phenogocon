@@ -1,3 +1,5 @@
+import os
+
 from org.apache.jena.rdf.model import ModelFactory
 from org.apache.jena.vocabulary import RDF
 from org.semanticweb.elk.owlapi import ElkReasonerFactory
@@ -5,20 +7,24 @@ from org.semanticweb.owlapi.apibinding import OWLManager
 from org.semanticweb.owlapi.model import IRI
 from org.semanticweb.owlapi.reasoner import ConsoleProgressMonitor, \
     SimpleConfiguration, InferenceType
-    
+from org.semanticweb.owlapi.search import EntitySearcher
+
 from Queue import Queue
 from threading import Thread
-import os
+
 
 numThreads = 48
 
-gobasic = "go-basic.obo"
+gobasic = "go.owl"
 go = "http://purl.obolibrary.org/obo/GO_"
 # down = ["http://purl.obolibrary.org/obo/PATO_0000462", "http://purl.obolibrary.org/obo/PATO_0000381", "http://purl.obolibrary.org/obo/PATO_0000911", "http://purl.obolibrary.org/obo/PATO_0000297", "http://purl.obolibrary.org/obo/PATO_0001511", "http://purl.obolibrary.org/obo/PATO_0001507"]
 # abnormal = ["http://purl.obolibrary.org/obo/PATO_0000001"]
 # up = ["http://purl.obolibrary.org/obo/PATO_0000912"]
 
 pheno2gofile = "pheno2go.txt"
+
+def create_class(s):
+    return fac.getOWLClass(IRI.create(s))
 
 def formatClassNames(s):
     s = s.replace("http://purl.obolibrary.org/obo/", "")
@@ -80,8 +86,18 @@ def job(i, q):
         clstring = formatClassNames(cl.toString())
         for [reg, updown] in [[pr, "up"], [nr, "down"]]:
             c = fac.getOWLObjectSomeValuesFrom(reg, cl)
-            for sub in reasoner.getSubClasses(c, True).getFlattened():
-                subs = formatClassNames(sub.toString())
+            c = fac.getOWLObjectIntersectionOf(c, create_class("http://purl.obolibrary.org/obo/GO_0065007"))
+            
+            equiv = reasoner.getEquivalentClasses(c)
+            
+#             if "0003094" in clstring:
+#                 print c
+#                 print equiv
+#                 for x in reasoner.getSubClasses(c, True).getFlattened():
+#                     print EntitySearcher.getEquivalentClasses(x, ont)
+            
+            for x in equiv:              
+                subs = formatClassNames(x.toString())
                 if subs == "owl:Nothing":
                     continue
                 if (subs, updown) not in regmap:
