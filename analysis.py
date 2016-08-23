@@ -52,6 +52,28 @@ def rev_formatClassNames(s):
     s = "http://purl.obolibrary.org/obo/" + s
     return s
 
+# build id map
+id2label = dict()
+owlfiles = ["go", "mp", "hp", "fypo"]
+ontset = set()
+for owl in owlfiles:
+    manager1 = OWLManager.createOWLOntologyManager()
+    ont1 = manager1.loadOntologyFromOntologyDocument(IRI.create("file:" + owl + ".owl"))
+    for cl in ont1.getClassesInSignature(True):
+        clid = formatClassNames(cl.toString())
+        for anno in EntitySearcher.getAnnotations(cl.getIRI(), ont1):
+            s = anno.getProperty().toStringID()
+            if s == "http://www.geneontology.org/formats/oboInOwl#hasExactSynonym":
+                id2label[clid] = anno.getValue().getLiteral()
+                break
+            
+def idtolabel(classid):
+    global id2label
+#     return classid
+    if classid in id2label:
+        return id2label[classid]
+    else:
+        return classid
 
 def hp_gene_mim_pheno():
     # uses the omim data to create a database of genes and phenos for HP, without the mim    
@@ -94,16 +116,16 @@ def fypo_gene_description_pheno():
     clset = ont.getClassesInSignature(True)
     desc2pheno = dict()
     for cl in clset:
-        id = ""
+        clid = ""
         synonyms = []
         for anno in EntitySearcher.getAnnotations(cl.getIRI(), ontology):
             s = anno.getProperty().toStringID()
             if s == "http://www.geneontology.org/formats/oboInOwl#hasExactSynonym":
                 synonyms.append(anno.getValue().getLiteral())
             elif s == "http://www.geneontology.org/formats/oboInOwl#id":
-                id = anno.getValue().getLiteral()
+                clid = anno.getValue().getLiteral()
         for syn in synonyms:
-            desc2pheno[syn] = id
+            desc2pheno[syn] = clid
     
     with open("phenotype_data.tab", 'r') as f:
         with open("FYPO_genepheno.tab", 'w') as g:
@@ -193,6 +215,7 @@ stats1 = Stats(speciesList)
 
 openset = set()
 closed = set()
+gene_counter = set()
 mflag, hflag, fflag = False, False, False
 # read and compare inferred phenos with database data
 print "Reading inferred phenos"
@@ -209,9 +232,11 @@ with open("inferred-phenos.txt", 'r') as f:
         if speciesname not in speciesnames:
             continue
         
-        gotemp = (gene, go1)
+        gotemp = (gene, go1, go2)
         if gotemp in closed:
             continue
+        
+        gene_counter.add(gene)
         
         if gotemp not in openset:
             openset.add(gotemp)
@@ -241,6 +266,40 @@ with open("inferred-phenos.txt", 'r') as f:
                     closed.add(gotemp)
                     break
 
+print "genes: ", len(gene_counter)
+
+# Go through inferences again, make pheno2go_equiv for those which don't match the data
+print "Making unverified pheno2go_equiv...\n"
+pheno2go_equiv = []
+with open("inferred-phenos.txt", 'r') as f:
+    for line in f:
+        tabs = line.strip('\n').split('\t')
+        gene = tabs[0]
+        pheno = tabs[1]
+        direction = tabs[2]
+        go1 = tabs[3]
+        go2 = tabs[4]
+        
+        speciesname = pheno[:pheno.find(':')]
+        if speciesname not in speciesnames:
+            continue
+        
+        gotemp = (gene, go1, go2)
+        if gotemp in closed:
+            continue
+        
+        if direction == "abnormal":
+            continue
+        
+        pheno2go_equiv.append("%s\t%s\t%s\t%s\t%s" % (gene, idtolabel(go1), idtolabel(go2), direction, idtolabel(pheno)))
+
+pheno2go_equiv.sort()        
+with open("pheno2go_equiv.txt", 'w') as g:
+    for prediction in pheno2go_equiv:
+        g.write(prediction + '\n')
+        
+print "%d pheno2go_equiv made" % len(pheno2go_equiv)
+
 closed = set()
 
 mflag, hflag, fflag = False, False, False
@@ -259,7 +318,7 @@ with open("neg-inferred-phenos.txt", 'r') as f:
         if speciesname not in speciesnames:
             continue
         
-        gotemp = (gene, go1)
+        gotemp = (gene, go1, go2)
         if gotemp in closed:
             continue  
              
