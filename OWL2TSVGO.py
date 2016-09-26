@@ -26,11 +26,11 @@ manager = OWLManager.createOWLOntologyManager()
 fac = manager.getOWLDataFactory()
 
 # owlfiles = ["mp", "hp", "dpo", "fypo", "apo", "wbphenotype"]
-owlfiles = ["mp"]
-output = []
-pheno2go_equiv = []
+owlfiles = ["mp", "hp", "fypo"]
+output = set()
+pheno2go_equiv = set()
 
-numThreads = 24
+numThreads = 48
 
 
 def create_class(s):
@@ -72,8 +72,16 @@ def is_proper_subclass(cl):
     return True
 
 
+def get_label(cl, ont):
+    for anno in EntitySearcher.getAnnotations(cl.getIRI(), ont):
+        s = anno.getProperty().toStringID()
+        if s == "http://www.geneontology.org/formats/oboInOwl#hasExactSynonym":
+            return anno.getValue().getLiteral()
+    return formatClassNames(cl.toString())
+
+
 def reg(cl, ont):
-    # determines the regulation direction of a phenotype 
+    # determines the regulation direction of a phenotype
     if not is_proper_subclass(cl) or "Go" in cl.toString():
         return ""
     pato, regout = "", ""
@@ -116,7 +124,6 @@ def reg(cl, ont):
     return regout
 
 def job(i, q, owl, ont):
-    global closed
     progressMonitor = ConsoleProgressMonitor()
     config = SimpleConfiguration(progressMonitor)
     reasoner = ElkReasonerFactory().createReasoner(ont, config)
@@ -131,52 +138,46 @@ def job(i, q, owl, ont):
             continue    
         
         for inhere in ["inheres-in", "inheres-in-part-of"]:
-        
-            if owl in ["mp", "hp"]:
-                temp = fac.getOWLObjectSomeValuesFrom(create_relation(inhere), goclass)
-                temppato = fac.getOWLObjectSomeValuesFrom(create_relation("has-modifier"), create_class(rev_formatClassNames(abnormal[0])))
-                temp = fac.getOWLObjectIntersectionOf(temppato, temp)
-                
-                temp1 = fac.getOWLObjectIntersectionOf(create_class(rev_formatClassNames(quality[0])), temp)
-                query = fac.getOWLObjectSomeValuesFrom(create_relation("has-part"), temp1)
-                
-            elif owl == "fypo":
-                temp = fac.getOWLObjectSomeValuesFrom(create_relation(inhere), goclass)
-                query = fac.getOWLObjectIntersectionOf(temp, create_class(rev_formatClassNames(quality[0])))
-                
-            elif owl == "dpo":
-                query = create_class("http://purl.obolibrary.org/obo/FBcv_0001347")
-                
-            elif owl == "wbphenotype":
-                pass
-            
-            subclasses = reasoner.getSubClasses(query, False).getFlattened()
-            for cl in subclasses:
-                regout = reg(cl, ont)
-                if regout:    
-                    output.append(((formatClassNames(cl.toString()), formatClassNames(goclass.toString()), regout)))
+            for pato in quality + up + down:
+                if owl in ["mp", "hp"]:
+                    temp = fac.getOWLObjectSomeValuesFrom(create_relation(inhere), goclass)
+                    temppato = fac.getOWLObjectSomeValuesFrom(create_relation("has-modifier"), create_class(rev_formatClassNames(abnormal[0])))
+                    temp = fac.getOWLObjectIntersectionOf(temppato, temp)
                     
-            if len(subclasses) <= 1:
-                continue
-            
-            equiv = list(reasoner.getEquivalentClasses(query))
-            preds = []
-            if equiv:
-                for cl in equiv:
-                    preds.append(cl)
-            else:
-                for cl in reasoner.getSubClasses(query, True).getFlattened(): 
-                    if not is_proper_subclass(cl):
-                        continue      
-                    parents = reasoner.getSuperClasses(cl, True).getFlattened()
+                    temp1 = fac.getOWLObjectIntersectionOf(create_class(rev_formatClassNames(pato)), temp)
+                    query = fac.getOWLObjectSomeValuesFrom(create_relation("has-part"), temp1)
+                    
+                elif owl == "fypo":
+                    temp = fac.getOWLObjectSomeValuesFrom(create_relation(inhere), goclass)
+                    query = fac.getOWLObjectIntersectionOf(temp, create_class(rev_formatClassNames(pato)))
+                    
+                elif owl == "dpo":
+                    query = create_class("http://purl.obolibrary.org/obo/FBcv_0001347")
+                    
+                elif owl == "wbphenotype":
+                    pass
+                
+                subclasses = reasoner.getSubClasses(query, False).getFlattened()
+                for cl in subclasses:
+                    regout = reg(cl, ont)
+                    if regout:    
+                        output.add(((formatClassNames(cl.toString()), formatClassNames(goclass.toString()), regout)))
+                
+                equiv = list(reasoner.getEquivalentClasses(query))
+                preds = []
+                if equiv:
+                    for cl in equiv:
+                        preds.append(cl)
+                else:
+                    parents = reasoner.getSuperClasses(query, True).getFlattened()
                     for parent in parents:
                         if is_proper_subclass(parent):
                             preds.append(parent)
-                        
-            for pred in preds:
-                regout = reg(pred, ont)
-                if regout:    
-                    pheno2go_equiv.append(((formatClassNames(pred.toString()), formatClassNames(goclass.toString()), regout)))
+                            
+                for pred in preds:
+                    regout = reg(pred, ont)
+                    if regout:    
+                        pheno2go_equiv.add(((formatClassNames(pred.toString()), formatClassNames(goclass.toString()), regout)))
             
         q.task_done()
 
@@ -186,9 +187,7 @@ pato_ont = manager.loadOntologyFromOntologyDocument(IRI.create("file:" + "pato.o
 
 goset = go_ont.getClassesInSignature(True)
 print "%d GO classes" % len(goset)
-    
-# Open output file
-closed = set()
+
 
 for owl in owlfiles:
     ontset = set()
@@ -221,11 +220,13 @@ for owl in owlfiles:
     # wait for threads to finish
     queue.join()
 
+output = list(output)
 output.sort()
 with open("pheno2go.txt", 'w') as gout:
     for triple in output:
         gout.write("%s\t%s\t%s\n" % triple)
 
+pheno2go_equiv = list(pheno2go_equiv)
 pheno2go_equiv.sort() 
 with open("pheno2go_equiv.txt", 'w') as gout:
     for triple in pheno2go_equiv:

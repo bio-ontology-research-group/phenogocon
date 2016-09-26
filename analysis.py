@@ -76,20 +76,52 @@ def idtolabel(classid):
         return classid
 
 def hp_gene_mim_pheno():
-    # uses the omim data to create a database of genes and phenos for HP, without the mim    
+    # uses the omim data to create a map of genes to phenos for HP, without the mim    
     mim2gene = dict()
-    with open("diseases_to_genes.txt", 'r') as f:
+    
+    with open("mim2gene.txt", 'r') as f:
         for line in f:
             if not line or line[0] in "#!":
                 continue
             tabs = line.strip('\n').split('\t')
-            if len(tabs) < 3:
+            if len(tabs) < 4:
                 continue
             mim = tabs[0]
-            gene = tabs[2]
-            if mim not in mim2gene:
-                mim2gene[mim] = set()
-            mim2gene[mim].add(gene)
+            if tabs[1] == "gene":
+                gene = tabs[3]
+                if mim and gene:
+                    mim2gene[mim] = gene
+                
+    with open("morbidmap", 'r') as f:
+        for line in f:
+            if not line or line[0] in "#!":
+                continue
+            tabs = line.strip('\n').split(', ')
+            for tab in tabs:
+                arr = tab.split('|')
+                if len(arr) < 2:
+                    continue
+                if '(' in arr[0]:
+                    arr = arr[1:]
+                if len(arr) < 2:
+                    continue
+                gene = arr[0]
+                mim = arr[1]
+                if mim and gene:
+                    mim2gene[mim] = gene
+                    print tab, mim, gene 
+    
+#     with open("diseases_to_genes.txt", 'r') as f:
+#         for line in f:
+#             if not line or line[0] in "#!":
+#                 continue
+#             tabs = line.strip('\n').split('\t')
+#             if len(tabs) < 3:
+#                 continue
+#             mim = tabs[0].replace("OMIM:", "")
+#             gene = tabs[2]
+#             if mim and gene:
+#                 mim2gene[mim] = gene
         
     with open("phenotype_annotation.tab", 'r') as f:
         with open("HP_genepheno.tab", 'w') as g:
@@ -97,16 +129,13 @@ def hp_gene_mim_pheno():
                 if not line or line[0] in "#!":
                     continue
                 tabs = line.split('\t')
-                if tabs[0] != "OMIM":
+                if "OMIM" not in tabs[0]:
                     continue
                 pheno = tabs[4]
-                mim = tabs[5]
-                if "OMIM" not in mim:
-                    continue
+                mim = tabs[1]
                 if mim not in mim2gene:
-                    continue      
-                for gene in mim2gene[mim]:
-                    g.write("%s\t%s\n" % (gene, pheno))
+                    continue
+                g.write("%s\t%s\n" % (mim2gene[mim], pheno))
 
 def fypo_gene_description_pheno():
     # maps genes to phenos via descriptions
@@ -209,141 +238,94 @@ class Stats:
             misses = self.stats[speciesname]["inconsistent up/down"]
             if hits + misses > 0:
                 print "accuracy = %d / %d = %f" % (hits, hits + misses, (hits+0.0)/(hits + misses))
-            print "unknown: %d" % (self.stats[speciesname]["total"] - self.stats[speciesname]["consistent"])
+#             print "unknown: %d" % (self.stats[speciesname]["total"] - self.stats[speciesname]["consistent"])
     
 stats1 = Stats(speciesList)
+gene_counter = dict()
+for s in speciesnames:
+    gene_counter[s] = set()
 
-openset = set()
-closed = set()
-gene_counter = set()
-mflag, hflag, fflag = False, False, False
-# read and compare inferred phenos with database data
 print "Reading inferred phenos"
-with open("inferred-phenos.txt", 'r') as f:
-    for line in f:
-        tabs = line.strip('\n').split('\t')
-        gene = tabs[0]
-        pheno = tabs[1]
-        direction = tabs[2]
-        go1 = tabs[3]
-        go2 = tabs[4]
-        
-        speciesname = pheno[:pheno.find(':')]
-        if speciesname not in speciesnames:
-            continue
-        
-        gotemp = (gene, go1, go2)
-        if gotemp in closed:
-            continue
-        
-        gene_counter.add(gene)
-        
-        if gotemp not in openset:
-            openset.add(gotemp)
-            stats1.increment(speciesname, "total")
-        
-        if gene in gene2pheno:
-            phenoclass = create_class(rev_formatClassNames(pheno))
-            subclasses = [phenoclass]#reasoner.getSubClasses(phenoclass, False).getFlattened()
-            for subpheno in subclasses:
-                if formatClassNames(subpheno.toString()) in gene2pheno[gene]:
-                    stats1.increment(speciesname, "consistent")
-                    
-                    if speciesname == "MP" and not mflag:
-                        mflag = True
-                        print line
+
+for k in range(2):
+    closed = set()
+    # read and compare inferred phenos with database data
+    filename = ["inferred_subclasses.txt", "neg_inferred_subclasses.txt"][k]
+    with open(filename, 'r') as f:
+        for line in f:
+            tabs = line.strip('\n').split('\t')
+            gene = tabs[0]
+            pheno = tabs[1];
+            direction = tabs[2]
+            go1 = tabs[3]
+            go2 = tabs[4]
+            
+            speciesname = pheno[:pheno.find(':')]
+            if speciesname not in speciesnames:
+                continue
+            
+            gotemp = (gene, go1, go2)
+            if gotemp in closed:
+                continue
+            
+            if k == 0:
+                gene_counter[speciesname].add(gene)
+            
+#             stats1.increment(speciesname, "total")
+            
+            if gene in gene2pheno:
+                phenoclass = create_class(rev_formatClassNames(pheno))
+                subclasses = [phenoclass]#reasoner.getSubClasses(phenoclass, False).getFlattened()
+                for subpheno in subclasses:
+                    if formatClassNames(subpheno.toString()) in gene2pheno[gene]:
+                        if k == 0: # consistent
+                            stats1.increment(speciesname, "consistent")
                         
-                    if speciesname == "HP" and not hflag:
-                        hflag = True
-                        print line
-                        
-                    if speciesname == "FYPO" and not fflag:
-                        fflag = True
-                        print line
+                        if go2 != "NONE":
+                            if k == 0:
+                                stats1.increment(speciesname, "consistent up/down")
+                            else:
+                                stats1.increment(speciesname, "inconsistent up/down")
+                        closed.add(gotemp)
+                        break
                     
-                    if go2 != "NONE":
-                        stats1.increment(speciesname, "consistent up/down")
-                    closed.add(gotemp)
-                    break
+    
 
-print "genes: ", len(gene_counter)
-
-# Go through inferences again, make pheno2go_equiv for those which don't match the data
-print "Making unverified pheno2go_equiv...\n"
-pheno2go_equiv = []
-with open("inferred-phenos.txt", 'r') as f:
-    for line in f:
-        tabs = line.strip('\n').split('\t')
-        gene = tabs[0]
-        pheno = tabs[1]
-        direction = tabs[2]
-        go1 = tabs[3]
-        go2 = tabs[4]
-        
-        speciesname = pheno[:pheno.find(':')]
-        if speciesname not in speciesnames:
-            continue
-        
-        gotemp = (gene, go1, go2)
-        if gotemp in closed:
-            continue
-        
-        if direction == "abnormal":
-            continue
-        
-        pheno2go_equiv.append("%s\t%s\t%s\t%s\t%s" % (gene, idtolabel(go1), idtolabel(go2), direction, idtolabel(pheno)))
-
-pheno2go_equiv.sort()        
-with open("pheno2go_equiv.txt", 'w') as g:
-    for prediction in pheno2go_equiv:
-        g.write(prediction + '\n')
-        
-print "%d pheno2go_equiv made" % len(pheno2go_equiv)
-
-closed = set()
-
-mflag, hflag, fflag = False, False, False
-
-print "Reading negated inferred phenos"
-with open("neg-inferred-phenos.txt", 'r') as f:
-    for line in f:
-        tabs = line.strip('\n').split('\t')
-        gene = tabs[0]
-        pheno = tabs[1]
-        direction = tabs[2]
-        go1 = tabs[3]
-        go2 = tabs[4]
-        
-        speciesname = pheno[:pheno.find(':')]
-        if speciesname not in speciesnames:
-            continue
-        
-        gotemp = (gene, go1, go2)
-        if gotemp in closed:
-            continue  
-             
-        if gene in gene2pheno:
-            phenoclass = create_class(rev_formatClassNames(pheno))
-            subclasses = [phenoclass]#reasoner.getSubClasses(phenoclass, False).getFlattened()
-            for subpheno in subclasses:
-                if formatClassNames(subpheno.toString()) in gene2pheno[gene]:
-                    
-                    if speciesname == "MP" and not mflag:
-                        mflag = True
-                        print line
-                        
-                    if speciesname == "HP" and not hflag:
-                        hflag = True
-                        print line
-                        
-                    if speciesname == "FYPO" and not fflag:
-                        fflag = True
-                        print line
-                    
-                    stats1.increment(speciesname, "inconsistent up/down")
-                    closed.add(gotemp)
-                    break
+for s in speciesnames:
+    print s, len(gene_counter[s])
         
 stats1.printStats()
+
+# Go through inferences again, make pheno2go_equiv for those which don't match the data
+# print "Making unverified pheno2go_equiv...\n"
+# pheno2go_equiv = []
+# with open("inferred-phenos.txt", 'r') as f:
+#     for line in f:
+#         tabs = line.strip('\n').split('\t')
+#         gene = tabs[0]
+#         pheno = tabs[1]
+#         direction = tabs[2]
+#         go1 = tabs[3]
+#         go2 = tabs[4]
+#         
+#         speciesname = pheno[:pheno.find(':')]
+#         if speciesname not in speciesnames:
+#             continue
+#         
+#         gotemp = (gene, go1, go2)
+#         if gotemp in closed:
+#             continue
+#         
+#         if direction == "abnormal":
+#             continue
+#         
+#         pheno2go_equiv.append("%s\t%s\t%s\t%s\t%s" % (gene, idtolabel(go1), idtolabel(go2), direction, idtolabel(pheno)))
+# 
+# pheno2go_equiv.sort()        
+# with open("xxx.txt", 'w') as g:
+#     for prediction in pheno2go_equiv:
+#         g.write(prediction + '\n')
+#         
+# print "%d pheno2go_equiv made" % len(pheno2go_equiv)
     
 print "\nProgram terminated"

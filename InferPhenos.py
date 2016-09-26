@@ -4,7 +4,7 @@ from org.apache.jena.rdf.model import ModelFactory
 from org.apache.jena.vocabulary import RDF
 from org.semanticweb.elk.owlapi import ElkReasonerFactory
 from org.semanticweb.owlapi.apibinding import OWLManager
-from org.semanticweb.owlapi.model import IRI
+from org.semanticweb.owlapi.model import IRI, OWLLiteral
 from org.semanticweb.owlapi.reasoner import ConsoleProgressMonitor, \
     SimpleConfiguration, InferenceType
 from org.semanticweb.owlapi.search import EntitySearcher
@@ -84,7 +84,7 @@ speciesList.append(Species("FBcv", "dpo", "gene_association.goa_fly", (2, 4)))
 
 # build id map
 id2label = dict()
-owlfiles = ["go", "mp"] #, "hp", "fypo"]
+owlfiles = ["go", "mp", "hp", "fypo"]
 ontset = set()
 for owl in owlfiles:
     manager1 = OWLManager.createOWLOntologyManager()
@@ -92,8 +92,10 @@ for owl in owlfiles:
     for cl in ont1.getClassesInSignature(True):
         clid = formatClassNames(cl.toString())
         for anno in EntitySearcher.getAnnotations(cl.getIRI(), ont1):
-            s = anno.getProperty().toStringID()
-            if s == "http://www.geneontology.org/formats/oboInOwl#hasExactSynonym":
+#             s = anno.getProperty().toStringID()
+#             if s == "http://www.geneontology.org/formats/oboInOwl#hasSynonym":
+#             if isinstance(anno.getValue(), OWLLiteral):
+            if anno.getProperty().isLabel():
                 id2label[clid] = anno.getValue().getLiteral()
                 break
             
@@ -213,92 +215,73 @@ for species in speciesList:
 
     
 # build inferences
-outlines = []
-outlines_equiv = []
+subclasses_output = [[], []]
+predictions = [[], []]
+
 print "Making inferences..."
-for gene in gene2go:
-    for gos in gene2go[gene]:
-        done = False
-        ancestor_queue = Queue()
-        ancestor_queue.put(gos)
-        while not ancestor_queue.empty():
-            ancestor = ancestor_queue.get()
-            ascend = False # whether we need to go up to the parent levels
-            if (ancestor, "abnormal") in go2pheno:
-                for pheno in go2pheno[(ancestor, "abnormal")]:
-                    outlines.append(("%s\t"*7 + '\n') % (gene, pheno, "abnormal", ancestor, "NONE", idtolabel(pheno), idtolabel(ancestor)))
-                    ascend = False
-            if (ancestor, "abnormal") in go2pheno_equiv:
-                for pheno in go2pheno_equiv[(ancestor, "abnormal")]:
-                    outlines_equiv.append(("%s\t"*7 + '\n') % (gene, pheno, "abnormal", ancestor, "NONE", idtolabel(pheno), idtolabel(ancestor)))
-            for i in range(2):
-                direction = ["up", "down"][i]
-                antidirection = ["up", "down"][1-i]
-                if (ancestor, direction) in regmap:
-                    go2 = regmap[(ancestor, direction)] # gos up/down-regulates go2
-                    for g2 in go2:
-                        if (g2, antidirection) in go2pheno: # find the decreased go2 phenotype
-                            for pheno in go2pheno[(g2, antidirection)]:
-                                outlines.append(("%s\t"*8 + '\n') % (gene, pheno, antidirection, ancestor, g2, idtolabel(pheno), idtolabel(ancestor), idtolabel(g2)))
-                                ascend = False
-                        if (g2, antidirection) in go2pheno_equiv:
-                            for pheno in go2pheno_equiv[(g2, antidirection)]:
-                                outlines_equiv.append(("%s\t"*8 + '\n') % (gene, pheno, antidirection, ancestor, g2, idtolabel(pheno), idtolabel(ancestor), idtolabel(g2)))
-            if ascend:
-                # replace go class with its ancestor, until reach Thing
-                query = create_class(rev_formatClassNames(ancestor))
-                parents = list(reasoner.getSuperClasses(query, True).getFlattened())
-#                 print gos, ancestor, parents
-                for parent in parents:
-                    if "Thing" not in parent.toString():
-                        ancestor_queue.put(formatClassNames(parent.toString()))
-    
-# # build inferences
-# outlines = set()
-# print "Making inferences..."
-# for gene in gene2go:
-#     for gos in gene2go[gene]:
-#         done = False
-#         ancestor_queue = Queue()
-#         ancestor_queue.put(gos)
-#         while not ancestor_queue.empty():
-#             ancestor = ancestor_queue.get()
-#             ascend = True # whether we need to go up to the parent levels
-#             if (ancestor, "abnormal") in go2pheno:
-#                 for pheno in go2pheno[(ancestor, "abnormal")]:
-#                     outlines.add("%s\t%s\t%s\t%s\t%s\n" % (gene, idtolabel(pheno), "abnormal", idtolabel(ancestor), "NONE"))
-#                     ascend = False
-#             for i in range(2):
-#                 direction = ["up", "down"][i]
-#                 antidirection = ["up", "down"][1-i]
-#                 if (ancestor, direction) in regmap:
-#                     go2 = regmap[(ancestor, direction)] # gos up/down-regulates go2
-#                     for g2 in go2:
-#                         if (g2, antidirection) in go2pheno: # find the decreased go2 phenotype
-#                             for pheno in go2pheno[(g2, antidirection)]:
-#                                 outlines.add("%s\t%s\t%s\t%s\t%s\n" % (gene, idtolabel(pheno), antidirection, idtolabel(ancestor), idtolabel(g2)))
-#                                 ascend = False
-#             if ascend:
-#                 # replace go class with its ancestor, until reach Thing
-#                 query = create_class(rev_formatClassNames(ancestor))
-#                 parents = list(reasoner.getSuperClasses(query, True).getFlattened())
-# #                 print gos, ancestor, parents
-#                 for parent in parents:
-#                     if "Thing" not in parent.toString():
-#                         ancestor_queue.put(formatClassNames(parent.toString()))
+
+for k in range(2): # decides whether we find matches or contradictions
+    for gene in gene2go:
+        for gos in gene2go[gene]:
+            done = False
+            ancestor_queue = Queue()
+            ancestor_queue.put(gos)
+            while not ancestor_queue.empty():
+                ancestor = ancestor_queue.get()
+                ascend = False # whether we need to go up to the parent levels
+                if (ancestor, "abnormal") in go2pheno:
+                    for pheno in go2pheno[(ancestor, "abnormal")]:
+                        subclasses_output[k].append(("%s\t"*7 + '\n') % (gene, pheno, "abnormal", ancestor, "NONE", idtolabel(pheno), idtolabel(ancestor)))
+                        ascend = False
+                if (ancestor, "abnormal") in go2pheno_equiv:
+                    for pheno in go2pheno_equiv[(ancestor, "abnormal")]:
+                        predictions[k].append(("%s\t"*7 + '\n') % (gene, pheno, "abnormal", ancestor, "NONE", idtolabel(pheno), idtolabel(ancestor)))
+                for i in range(2):
+                    direction = ["up", "down"][i]
+                    antidirection = ["up", "down"][1-i-k] # for k=1, will be same as direction
+                    if (ancestor, direction) in regmap:
+                        go2 = regmap[(ancestor, direction)] # gos up/down-regulates go2
+                        for g2 in go2:
+                            if (g2, antidirection) in go2pheno: # find the decreased go2 phenotype
+                                for pheno in go2pheno[(g2, antidirection)]:
+                                    subclasses_output[k].append(("%s\t"*8 + '\n') % (gene, pheno, antidirection, ancestor, g2, idtolabel(pheno), idtolabel(ancestor), idtolabel(g2)))
+                                    ascend = False
+                            if (g2, antidirection) in go2pheno_equiv:
+                                for pheno in go2pheno_equiv[(g2, antidirection)]:
+                                    predictions[k].append(("%s\t"*8 + '\n') % (gene, pheno, antidirection, ancestor, g2, idtolabel(pheno), idtolabel(ancestor), idtolabel(g2)))
+                if ascend:
+                    # replace go class with its ancestor, until reach Thing
+                    query = create_class(rev_formatClassNames(ancestor))
+                    parents = list(reasoner.getSuperClasses(query, True).getFlattened())
+                    # print gos, ancestor, parents
+                    for parent in parents:
+                        if "Thing" not in parent.toString():
+                            ancestor_queue.put(formatClassNames(parent.toString()))
                 
                             
-print "%d inferences made. Writing to file..." % len(outlines)
-outlines.sort()
-with open("inferred-phenos.txt", 'w') as gout:
-    for string in outlines:
+print "%d subclasses inferred. Writing to file..." % len(subclasses_output[0])
+subclasses_output[0].sort()
+with open("inferred_subclasses.txt", 'w') as gout:
+    for string in subclasses_output[0]:
         gout.write(string)
         
-outlines_equiv.sort()
+print "%d predictions made. Writing to file..." % len(predictions[0])
+predictions[0].sort()
 with open("predictions.txt", 'w') as gout:
-    for string in outlines_equiv:
+    for string in predictions[0]:
         gout.write(string)
         
+print "%d negated subclasses inferred. Writing to file..." % len(subclasses_output[1])
+subclasses_output[1].sort()
+with open("neg_inferred_subclasses.txt", 'w') as gout:
+    for string in subclasses_output[1]:
+        gout.write(string)
+        
+print "%d negated predictions made. Writing to file..." % len(predictions[1])
+predictions[1].sort()
+with open("neg_predictions.txt", 'w') as gout:
+    for string in predictions[1]:
+        gout.write(string)
         
 # negated inferences
 # negoutlines = set()
