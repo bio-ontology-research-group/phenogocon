@@ -26,7 +26,7 @@ manager = OWLManager.createOWLOntologyManager()
 fac = manager.getOWLDataFactory()
 
 # owlfiles = ["mp", "hp", "dpo", "fypo", "apo", "wbphenotype"]
-owlfiles = ["mp", "hp", "fypo"]
+owlfiles = ["dpo"]
 output = set()
 pheno2go_equiv = set()
 
@@ -46,6 +46,8 @@ def create_relation(s):
         istring = "http://purl.obolibrary.org/obo/RO_0002573"
     elif s == "inheres-in-part-of":
         istring = "http://purl.obolibrary.org/obo/RO_0002314"
+    elif s == "qualifier":
+        istring = "http://purl.obolibrary.org/obo/fbcv#qualifier"
     else:
         raise Exception
 #         istring = "http://phenomebrowser.net/#" + s
@@ -152,9 +154,17 @@ def job(i, q, owl, ont):
                     query = fac.getOWLObjectIntersectionOf(temp, create_class(rev_formatClassNames(pato)))
                     
                 elif owl == "dpo":
-                    query = create_class("http://purl.obolibrary.org/obo/FBcv_0001347")
+                    temp = fac.getOWLObjectSomeValuesFrom(create_relation(inhere), goclass)
+                    temppato = fac.getOWLObjectSomeValuesFrom(create_relation("qualifier"), create_class(rev_formatClassNames(abnormal[0])))
+                    temp = fac.getOWLObjectIntersectionOf(temppato, temp)
+                    
+                    temp1 = fac.getOWLObjectIntersectionOf(create_class(rev_formatClassNames(pato)), temp)
+                    query = temp1
                     
                 elif owl == "wbphenotype":
+                    pass
+                
+                elif owl == "apo":
                     pass
                 
                 subclasses = reasoner.getSubClasses(query, False).getFlattened()

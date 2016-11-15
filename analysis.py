@@ -12,7 +12,7 @@ factory = manager.getOWLDataFactory()
 ontset = set()
 ontset.add(manager.loadOntologyFromOntologyDocument(IRI.create("file:" + "mp.owl")))
 ontset.add(manager.loadOntologyFromOntologyDocument(IRI.create("file:" + "hp.owl")))
-ontset.add(manager.loadOntologyFromOntologyDocument(IRI.create("file:" + "fypo.owl")))
+# ontset.add(manager.loadOntologyFromOntologyDocument(IRI.create("file:" + "fypo.owl")))
 ont = manager.createOntology(IRI.create("http://aber-owl.net/phenotype-input.owl"), ontset)
 
 progressMonitor = ConsoleProgressMonitor()
@@ -78,7 +78,8 @@ def idtolabel(classid):
 def hp_gene_mim_pheno():
     # uses the omim data to create a map of genes to phenos for HP, without the mim    
     mim2gene = dict()
-    
+     
+     
     with open("mim2gene.txt", 'r') as f:
         for line in f:
             if not line or line[0] in "#!":
@@ -90,52 +91,71 @@ def hp_gene_mim_pheno():
             if tabs[1] == "gene":
                 gene = tabs[3]
                 if mim and gene:
-                    mim2gene[mim] = gene
-                
-    with open("morbidmap", 'r') as f:
+                    if mim not in mim2gene:
+                        mim2gene[mim] = set()
+                    mim2gene[mim].add(gene)
+     
+    disease2gene = dict()
+     
+    with open("morbidmap.txt", 'r') as f:
         for line in f:
             if not line or line[0] in "#!":
                 continue
-            tabs = line.strip('\n').split(', ')
-            for tab in tabs:
-                arr = tab.split('|')
-                if len(arr) < 2:
-                    continue
-                if '(' in arr[0]:
-                    arr = arr[1:]
-                if len(arr) < 2:
-                    continue
-                gene = arr[0]
-                mim = arr[1]
-                if mim and gene:
-                    mim2gene[mim] = gene
-                    print tab, mim, gene 
-    
-#     with open("diseases_to_genes.txt", 'r') as f:
-#         for line in f:
-#             if not line or line[0] in "#!":
-#                 continue
-#             tabs = line.strip('\n').split('\t')
-#             if len(tabs) < 3:
-#                 continue
-#             mim = tabs[0].replace("OMIM:", "")
-#             gene = tabs[2]
-#             if mim and gene:
-#                 mim2gene[mim] = gene
-        
+            tabs = line.strip('\n').split('\t')
+            x = tabs[0].split(', ')
+            temp = x[-1].split()
+            disease = temp[0]
+            if len(disease) == 6 and disease.isdigit():
+                disease = int(disease)
+                genemim = tabs[2]
+                if genemim in mim2gene:
+                    for gene in mim2gene[genemim]:
+                        if disease not in disease2gene:
+                            disease2gene[disease] = set()
+                        disease2gene[disease].add(gene)
+     
+    with open("diseases_to_genes.txt", 'r') as f:
+        for line in f:
+            if not line or line[0] in "#!":
+                continue
+            tabs = line.strip('\n').split('\t')
+            if len(tabs) < 3:
+                continue
+            disease = tabs[0].replace("OMIM:", "")
+            gene = tabs[2]
+            if disease not in disease2gene:
+                disease2gene[disease] = set()
+            disease2gene[disease].add(gene)
+            print disease, gene
+         
+    pairings = set()
+         
     with open("phenotype_annotation.tab", 'r') as f:
-        with open("HP_genepheno.tab", 'w') as g:
-            for line in f:
-                if not line or line[0] in "#!":
-                    continue
-                tabs = line.split('\t')
-                if "OMIM" not in tabs[0]:
-                    continue
-                pheno = tabs[4]
-                mim = tabs[1]
-                if mim not in mim2gene:
-                    continue
-                g.write("%s\t%s\n" % (mim2gene[mim], pheno))
+        for line in f:
+            if not line or line[0] in "#!":
+                continue
+            tabs = line.split('\t')
+            if "OMIM" not in tabs[0]:
+                continue
+            pheno = tabs[4]
+            disease = tabs[1]
+            if disease not in disease2gene:
+                continue
+            for gene in disease2gene[disease]:
+                pairings.add("%s\t%s\n" % (gene, pheno))
+                    
+    with open("ALL_SOURCES_ALL_FREQUENCIES_phenotype_to_genes.txt", 'r') as f:
+        for line in f:
+            if not line or line[0] in "#!":
+                continue
+            tabs = line.strip('\n').split('\t')
+            pheno = tabs[0]
+            gene = tabs[3]
+            pairings.add("%s\t%s\n" % (gene, pheno))
+            
+    with open("HP_genepheno.tab", 'w') as g:
+        for pair in pairings:
+            g.write(pair)
 
 def fypo_gene_description_pheno():
     # maps genes to phenos via descriptions
@@ -289,8 +309,6 @@ for k in range(2):
                         closed.add(gotemp)
                         break
                     
-    
-
 for s in speciesnames:
     print s, len(gene_counter[s])
         
