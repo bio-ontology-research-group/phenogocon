@@ -1,7 +1,7 @@
 import os
 
-from org.apache.jena.rdf.model import ModelFactory
-from org.apache.jena.vocabulary import RDF
+# from org.apache.jena.rdf.model import ModelFactory
+# from org.apache.jena.vocabulary import RDF
 from org.semanticweb.elk.owlapi import ElkReasonerFactory
 from org.semanticweb.owlapi.apibinding import OWLManager
 from org.semanticweb.owlapi.model import IRI, OWLLiteral
@@ -66,25 +66,25 @@ class Species:
         self.name = name
         self.association = association
         self.columns = columns
-        
+
 speciesList = []
 # put your species here, each instance is [name, filename, columns (gene, pheno)]
-speciesList.append(Species("MP", "mp", "gene_association.mgi", (1, 4)))
+#speciesList.append(Species("MP", "mp", "gene_association.mgi", (1, 4)))
 speciesList.append(Species("HP", "hp", "gene_association.goa_human", (2, 4)))
-speciesList.append(Species("FYPO", "fypo", "gene_association.goa_yeast", (2, 4)))
-speciesList.append(Species("FBcv", "dpo", "gene_association.goa_fly", (2, 4)))
+#speciesList.append(Species("FYPO", "fypo", "gene_association.goa_yeast", (2, 4)))
+#speciesList.append(Species("FBcv", "dpo", "gene_association.goa_fly", (2, 4)))
 
 # pheno ontologies
 # ontset = set()
 # for species in speciesList:
 #     ontset.add(manager.loadOntologyFromOntologyDocument(IRI.create("file:" + species.owl + ".owl")))
-#     
+#
 # phenos_ont = manager.createOntology(IRI.create("http://aber-owl.net/phenotypes.owl"), ontset)
 
 
 # build id map
 id2label = dict()
-owlfiles = ["go", "dpo"]# "mp", "hp", "fypo"]
+owlfiles = ["go", "hp"]# "mp", "hp", "fypo"]
 ontset = set()
 for owl in owlfiles:
     manager1 = OWLManager.createOWLOntologyManager()
@@ -98,8 +98,8 @@ for owl in owlfiles:
             if anno.getProperty().isLabel():
                 id2label[clid] = anno.getValue().getLiteral()
                 break
-            
-            
+
+
 def idtolabel(classid):
     global id2label
 #     return classid
@@ -125,22 +125,22 @@ def job(i, q):
         size = q._qsize()
         if size % 1000 == 0:
             print "%d entries left in queue" % size
-                
+
         clstring = formatClassNames(cl.toString())
         for [reg, updown] in [[pr, "up"], [nr, "down"]]:
             c = fac.getOWLObjectSomeValuesFrom(reg, cl)
             c = fac.getOWLObjectIntersectionOf(c, create_class("http://purl.obolibrary.org/obo/GO_0065007"))
-            
+
             equiv = reasoner.getEquivalentClasses(c)
-            
-            for x in equiv:              
+
+            for x in equiv:
                 subs = formatClassNames(x.toString())
                 if subs == "owl:Nothing":
                     continue
                 if (subs, updown) not in regmap:
                     regmap[(subs, updown)] = set()
                 regmap[(subs, updown)].add(clstring)
-                
+
         q.task_done()
 
 if os.path.isfile("regmap_data.txt"):
@@ -156,23 +156,23 @@ else: # delete regmap data in order to rebuild map
     for cl in ont.getClassesInSignature(True):
         queue.put(cl)
     print "Queue built. There are %d classes to process." % queue._qsize()
-    
+
     # initiate threads
     for i in range(numThreads):
         print "Thread %d initiated" % (i+1)
         t = Thread(target=job, args=(i, queue))
         t.setDaemon(True)
         t.start()
-    
+
     # wait for threads to finish
     queue.join()
-    
+
     # write to text file, next time we can just load data from text file
     with open("regmap_data.txt", 'w') as g:
         for (subs, updown) in regmap:
             for clstring in regmap[(subs, updown)]:
                 g.write("%s\t%s\t%s\n" % (subs, updown, clstring))
-                
+
 
 # build go2pheno
 print "Building go2pheno..."
@@ -184,7 +184,7 @@ for line in open(pheno2gofile, 'r'):
     if (gos, reg) not in go2pheno:
         go2pheno[(gos, reg)] = set()
     go2pheno[(gos, reg)].add(pheno)
-    
+
 for line in open(pheno2gofile_equiv, 'r'):
     tabs = line.strip('\n').split('\t')
     pheno = tabs[0]
@@ -213,7 +213,7 @@ for species in speciesList:
                 gene2go[gene] = set()
             gene2go[gene].add(gos)
 
-    
+
 # build inferences
 subclasses_output = [[], []]
 predictions = [[], []]
@@ -257,31 +257,31 @@ for k in range(2): # decides whether we find matches or contradictions
                     for parent in parents:
                         if "Thing" not in parent.toString():
                             ancestor_queue.put(formatClassNames(parent.toString()))
-                
-                            
+
+
 print "%d subclasses inferred. Writing to file..." % len(subclasses_output[0])
 subclasses_output[0].sort()
 with open("inferred_subclasses.txt", 'w') as gout:
     for string in subclasses_output[0]:
         gout.write(string)
-        
+
 print "%d predictions made. Writing to file..." % len(predictions[0])
 predictions[0].sort()
 with open("predictions.txt", 'w') as gout:
     for string in predictions[0]:
         gout.write(string)
-        
+
 print "%d negated subclasses inferred. Writing to file..." % len(subclasses_output[1])
 subclasses_output[1].sort()
 with open("neg_inferred_subclasses.txt", 'w') as gout:
     for string in subclasses_output[1]:
         gout.write(string)
-        
+
 print "%d negated predictions made. Writing to file..." % len(predictions[1])
 predictions[1].sort()
 with open("neg_predictions.txt", 'w') as gout:
     for string in predictions[1]:
         gout.write(string)
-        
-        
+
+
 print "Program terminated."

@@ -6,6 +6,9 @@ from org.semanticweb.owlapi.search import EntitySearcher
 
 from Queue import Queue
 from threading import Thread
+from org.apache.log4j import Logger, Level
+
+Logger.getRootLogger().setLevel(Level.OFF)
 
 # from org.semanticweb.owlapi.model.parameters import Imports
 # from org.semanticweb.owlapi.reasoner.structural import StructuralReasonerFactory
@@ -26,7 +29,7 @@ manager = OWLManager.createOWLOntologyManager()
 fac = manager.getOWLDataFactory()
 
 # owlfiles = ["mp", "hp", "dpo", "fypo", "apo", "wbphenotype"]
-owlfiles = ["dpo"]
+owlfiles = ["mp", "hp"]
 output = set()
 pheno2go_equiv = set()
 
@@ -87,7 +90,7 @@ def reg(cl, ont):
     if not is_proper_subclass(cl) or "Go" in cl.toString():
         return ""
     pato, regout = "", ""
-    
+
     done = False
     for c in EntitySearcher.getEquivalentClasses(cl, ont): # OWL Class Expression
         if c.isClassExpressionLiteral():
@@ -115,7 +118,7 @@ def reg(cl, ont):
                     break
         if done:
             break
-    
+
     if pato in up:
         regout = "up"
     elif pato in down:
@@ -134,45 +137,45 @@ def job(i, q, owl, ont):
         size = q._qsize()
         if size % 1000 == 0:
             print "%d entries left in queue" % size
-            
+
         if not is_proper_subclass(goclass):
             q.task_done
-            continue    
-        
+            continue
+
         for inhere in ["inheres-in", "inheres-in-part-of"]:
             for pato in quality + up + down:
                 if owl in ["mp", "hp"]:
                     temp = fac.getOWLObjectSomeValuesFrom(create_relation(inhere), goclass)
                     temppato = fac.getOWLObjectSomeValuesFrom(create_relation("has-modifier"), create_class(rev_formatClassNames(abnormal[0])))
                     temp = fac.getOWLObjectIntersectionOf(temppato, temp)
-                    
+
                     temp1 = fac.getOWLObjectIntersectionOf(create_class(rev_formatClassNames(pato)), temp)
                     query = fac.getOWLObjectSomeValuesFrom(create_relation("has-part"), temp1)
-                    
+
                 elif owl == "fypo":
                     temp = fac.getOWLObjectSomeValuesFrom(create_relation(inhere), goclass)
                     query = fac.getOWLObjectIntersectionOf(temp, create_class(rev_formatClassNames(pato)))
-                    
+
                 elif owl == "dpo":
                     temp = fac.getOWLObjectSomeValuesFrom(create_relation(inhere), goclass)
                     temppato = fac.getOWLObjectSomeValuesFrom(create_relation("qualifier"), create_class(rev_formatClassNames(abnormal[0])))
                     temp = fac.getOWLObjectIntersectionOf(temppato, temp)
-                    
+
                     temp1 = fac.getOWLObjectIntersectionOf(create_class(rev_formatClassNames(pato)), temp)
                     query = temp1
-                    
+
                 elif owl == "wbphenotype":
                     pass
-                
+
                 elif owl == "apo":
                     pass
-                
+
                 subclasses = reasoner.getSubClasses(query, False).getFlattened()
                 for cl in subclasses:
                     regout = reg(cl, ont)
-                    if regout:    
+                    if regout:
                         output.add(((formatClassNames(cl.toString()), formatClassNames(goclass.toString()), regout)))
-                
+
                 equiv = list(reasoner.getEquivalentClasses(query))
                 preds = []
                 if equiv:
@@ -183,12 +186,12 @@ def job(i, q, owl, ont):
                     for parent in parents:
                         if is_proper_subclass(parent):
                             preds.append(parent)
-                            
+
                 for pred in preds:
                     regout = reg(pred, ont)
-                    if regout:    
+                    if regout:
                         pheno2go_equiv.add(((formatClassNames(pred.toString()), formatClassNames(goclass.toString()), regout)))
-            
+
         q.task_done()
 
 
@@ -204,29 +207,29 @@ for owl in owlfiles:
     ontset.add(manager.loadOntologyFromOntologyDocument(IRI.create("file:" + owl + ".owl")))
     ontset.add(go_ont)
     ontset.add(pato_ont)
-    
+
     ont = manager.createOntology(IRI.create("http://aber-owl.net/phenotype-input-%s.owl" % owl), ontset)
-    
+
     progressMonitor = ConsoleProgressMonitor()
     config = SimpleConfiguration(progressMonitor)
     reasoner = ElkReasonerFactory().createReasoner(ont, config)
-    
+
     queue = Queue()
-    
+
     counter = 0
     print "Checking query subclasses for %s..." % owl
     for goclass in goset:
         queue.put(goclass)
-            
+
     print "Queue built. There are %d classes to process." % queue._qsize()
-    
+
     # initiate threads
     for i in range(numThreads):
         print "Thread %d initiated" % (i+1)
         t = Thread(target=job, args=(i, queue, owl, ont))
         t.setDaemon(True)
         t.start()
-    
+
     # wait for threads to finish
     queue.join()
 
@@ -237,9 +240,9 @@ with open("pheno2go.txt", 'w') as gout:
         gout.write("%s\t%s\t%s\n" % triple)
 
 pheno2go_equiv = list(pheno2go_equiv)
-pheno2go_equiv.sort() 
+pheno2go_equiv.sort()
 with open("pheno2go_equiv.txt", 'w') as gout:
     for triple in pheno2go_equiv:
         gout.write("%s\t%s\t%s\n" % triple)
-        
+
 print "Program terminated."
