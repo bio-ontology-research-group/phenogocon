@@ -9,6 +9,7 @@ import sys
 from sklearn.metrics import roc_curve, auc
 from matplotlib import pyplot as plt
 from scipy.stats import spearmanr, pearsonr, wilcoxon
+import gzip
 
 
 @ck.command()
@@ -17,14 +18,15 @@ def main():
 
 
 def run():
-    gd = gene_disease()
+    # gd = gene_disease()
     genes = load_genes()
-    diseases = load_diseases()
+    ppi = load_ppi()
+    # diseases = load_diseases()
     scores = load_scores()
     associations = list()
     for i in xrange(len(genes)):
-        for j in xrange(len(diseases)):
-            if genes[i] in gd and diseases[j] in gd[genes[i]]:
+        for j in xrange(len(genes)):
+            if genes[i] in ppi and genes[j] in ppi[genes[i]]:
                 associations.append(1)
             else:
                 associations.append(0)
@@ -33,6 +35,36 @@ def run():
     print('ROC AUC: ', roc_auc)
 
 
+def load_ppi():
+    res = dict()
+    mapping = dict()
+    with open('data/mgi2string.tab') as f:
+        for line in f:
+            it = line.strip().split('\t')
+            st = it[0]
+            mgi = it[1]
+            if st not in mapping:
+                mapping[st] = list()
+            mapping[st].append(mgi)
+    with gzip.open('data/10090.protein.links.v10.5.txt.gz') as f:
+        next(f)
+        for line in f:
+            it = line.strip().split()
+            p1, p2, score = it[0], it[1], int(it[2])
+            if score >= 300 and p1 in mapping and p2 in mapping:
+                p1 = mapping[p1]
+                p2 = mapping[p2]
+                for g1 in p1:
+                    for g2 in p2:
+                        if g1 not in res:
+                            res[g1] = set()
+                        if g2 not in res:
+                            res[g2] = set()
+                        res[g1].add(g2)
+                        res[g2].add(g1)
+    return res
+        
+        
 def load_homo():
     res = dict()
     with open('data/hom_mouse.tab', 'r') as f:
@@ -66,7 +98,7 @@ def gene_disease():
 
 def load_scores():
     scores = list()
-    with open('data/sim_gene_disease_only.txt') as f:
+    with open('data/sim_ppi.txt') as f:
         for line in f:
             scores.append(float(line.strip()))
     scores = (np.array(scores) - min(scores)) / (max(scores) - min(scores))
@@ -75,7 +107,7 @@ def load_scores():
 
 def load_genes():
     genes = list()
-    with open('data/mgi_annotations_only_pred.tab') as f:
+    with open('data/mgi_annotations.tab') as f:
         for line in f:
             items = line.strip().split('\t')
             genes.append(items[0])
@@ -105,7 +137,7 @@ def compute_roc(scores, test):
     plt.ylim([0.0, 1.05])
     plt.xlabel('False Positive Rate')
     plt.ylabel('True Positive Rate')
-    plt.title('ROC Curve BMA Resnik - Mouse Gene-Disease')
+    plt.title('ROC Curve BMA Resnik - Mouse PPI')
     plt.legend(loc="lower right")
     plt.show()
     return roc_auc

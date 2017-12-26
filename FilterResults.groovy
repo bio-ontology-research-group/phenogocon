@@ -11,11 +11,11 @@ FUNCS = [
     CELLULAR_COMPONENT
 ].toSet()
 
-FILTER = ["-2", "2"].toSet()
+FILTER = ["increase_inconsistent", "decrease_inconsistent"].toSet()
 
-new File("data/predictions_human.txt").eachLine() { line ->
+new File("data/predictions.txt").eachLine() { line ->
     def items = line.trim().split("\t")
-    if (!(items[1] in FUNCS) && (items[3] in FILTER)) {
+    if (!(items[3] in FILTER)) {
         println(line)
     }
 }

@@ -72,43 +72,8 @@ phenomenet.getClassesInSignature().each {
 annotations = [:].withDefault { new HashSet<String>() }
 predictions = [:].withDefault { new HashSet<String>() }
 
-// new File("data/MGI_GenePheno.rpt").splitEachLine("\t") { items ->
-//     pheno = items[4].replaceAll(":", "_")
-//     anchestors = new HashSet<String>()
-//     anchestors.add(pheno)
-//     // getAnchestors(phenomeReasoner, pheno).each { cl ->
-//     //     def name = getName(cl)
-//     //     if (name.startsWith("MP") || name.startsWith("HP")) {
-//     //         anchestors.add(name)
-//     //     }
-//     // }
-
-//     mgis = items[6].split(",")
-//     mgis.each { mgi ->
-//         annotations[mgi].addAll(anchestors)
-//     }
-// }
-
-new File("data/diseases_to_genes_to_phenotypes.txt").eachLine { line ->
-    if (line.startsWith("#")) return;
-    def items = line.split("\t")
-    def gene = items[1]
-    def hp = items[3].replaceAll(":", "_")
-    anchestors = new HashSet<String>()
-    anchestors.add(hp)
-    // getAnchestors(phenomeReasoner, hp).each { cl ->
-    //     def name = getName(cl)
-    //     if (name.startsWith("MP") || name.startsWith("HP")) {
-    //         anchestors.add(name)
-    //     }
-    // }
-    
-    annotations[gene].addAll(anchestors)
-    
-}
-
-new File("data/predictions_human_filtered.txt").splitEachLine("\t") { items ->
-    pheno = items[2].replaceAll(":", "_")
+new File("data/MGI_GenePheno.rpt").splitEachLine("\t") { items ->
+    pheno = items[4].replaceAll(":", "_")
     anchestors = new HashSet<String>()
     anchestors.add(pheno)
     getAnchestors(phenomeReasoner, pheno).each { cl ->
@@ -118,11 +83,49 @@ new File("data/predictions_human_filtered.txt").splitEachLine("\t") { items ->
         }
     }
 
-    mgi = items[0]
-    predictions[mgi].addAll(anchestors)
+    mgis = items[6].split(",")
+    mgis.each { mgi ->
+        annotations[mgi].addAll(anchestors)
+    }
 }
 
-def mgis = predictions.keySet()
+// new File("data/diseases_to_genes_to_phenotypes.txt").eachLine { line ->
+//     if (line.startsWith("#")) return;
+//     def items = line.split("\t")
+//     def gene = items[1]
+//     def hp = items[3].replaceAll(":", "_")
+//     anchestors = new HashSet<String>()
+//     anchestors.add(hp)
+//     getAnchestors(phenomeReasoner, hp).each { cl ->
+//         def name = getName(cl)
+//         if (name.startsWith("MP") || name.startsWith("HP")) {
+//             anchestors.add(name)
+//         }
+//     }
+    
+//     annotations[gene].addAll(anchestors)
+    
+// }
+
+new File("data/predictions_incon.txt").splitEachLine("\t") { items ->
+    pheno = items[2].replaceAll(":", "_")
+    anchestors = new HashSet<String>()
+    anchestors.add(pheno)
+    // getAnchestors(phenomeReasoner, pheno).each { cl ->
+    //     def name = getName(cl)
+    //     if (name.startsWith("MP") || name.startsWith("HP")) {
+    //         anchestors.add(name)
+    //     }
+    // }
+    gene = items[0]
+    annot = items[1]
+    if (pheno in annotations[gene]) {
+	println("$gene\t$annot\t$pheno")
+    }
+    predictions[gene].addAll(anchestors)
+}
+
+def genes = predictions.keySet()
 
 def total = 0
 def tp_total = 0
@@ -130,9 +133,9 @@ def f = 0.0
 def p = 0.0
 def r = 0.0
 
-mgis.each { mgi ->
-    def annots = annotations[mgi]
-    def preds = predictions[mgi]
+genes.each { gene ->
+    def annots = annotations[gene]
+    def preds = predictions[gene]
     def tp = annots.intersect(preds).size()
     tp_total += tp
     total += preds.size()

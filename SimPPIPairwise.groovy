@@ -29,8 +29,7 @@ System.setProperty("jdk.xml.totalEntitySizeLimit", "0");
 
 def factory = URIFactoryMemory.getSingleton()
 def annotationsPath = "data/mgi_annotations.tab";
-def omimPath = "data/omim_annotations.tab";
-def resSimPath = "data/sim_gene_disease.txt";
+def resSimPath = "data/sim_ppi.txt";
 
 
 class Gene {
@@ -103,23 +102,8 @@ def getGenes = {
   return genes
 }
 
-def getDiseases = {
-  def dis = []
-  def i = 0
-  new File(omimPath).splitEachLine('\t') { items ->
-    def s = 0
-    dis.push(new Gene(i, new LinkedHashSet()))
-    for (int j = 1; j < items.size(); j++) {
-      dis[i].addAnnotation(getURIfromName(items[j]))
-    }
-    i++
-  }
-  return dis
-}
-
 graph = getPhenomenet()
 genes = getGenes()
-diseases = getDiseases()
 
 def sim_id = 0 //this.args[0].toInteger()
 
@@ -157,7 +141,7 @@ smConfPairwise.setICconf(icConf);
 // ICconf prob = new IC_Conf_Topo(SMConstants.FLAG_ICI_PROB_OCCURENCE_PROPAGATED);
 // smConfPairwise.addParam("ic_prob", prob);
 
-def result = new Double[genes.size() * diseases.size()]
+def result = new Double[genes.size() * genes.size()]
 for (i = 0; i < result.size(); i++) {
   result[i] = i
 }
@@ -167,13 +151,13 @@ def c = 0
 GParsPool.withPool {
   result.eachParallel { val ->
     def i = val.toInteger()
-    def x = i.intdiv(diseases.size())
-    def y = i % diseases.size()
+    def x = i.intdiv(genes.size())
+    def y = i % genes.size()
     result[i] = engine.compare(
             smConfGroupwise,
             smConfPairwise,
             genes[x].getAnnotations(),
-            diseases[y].getAnnotations())
+            genes[y].getAnnotations())
     if (c % 100000 == 0)
       println c
     c++
@@ -183,8 +167,8 @@ GParsPool.withPool {
 def out = new PrintWriter(new BufferedWriter(
   new FileWriter(resSimPath)))
 for (i = 0; i < result.size(); i++) {
-  def x = i.intdiv(diseases.size())
-  def y = i % diseases.size()
+  def x = i.intdiv(genes.size())
+  def y = i % genes.size()
   out.println(result[i])
 }
 out.flush()

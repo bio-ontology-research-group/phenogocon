@@ -60,27 +60,34 @@ def getLabel = { term_id ->
     return "";
 }
 
+IRI iri = IRI.create("http://purl.obolibrary.org/obo/GO_0065007")
+OWLClass reg = dataFactory.getOWLClass(iri)
+        
 GParsPool.withPool {
     ont.getClassesInSignature(true).eachParallel { cl ->
         def cls = cl.toString()
         cls = cls.substring(32, cls.length() - 1)
         def c = fac.getOWLObjectSomeValuesFrom(pr, cl)
-
-        reasoner.getSubClasses(c, false).getFlattened().each { sub ->
+	c = fac.getOWLObjectIntersectionOf(reg, c)
+	reasoner.getEquivalentClasses(c).getEntities().each { sub ->
             def s = sub.toString()
             if (s.startsWith("<http://purl.obolibrary.org/obo/GO_")) {
                 s = s.substring(32, s.length() - 1)
                 posReg[s].add(cls)
             }
         }
+
         c = fac.getOWLObjectSomeValuesFrom(nr, cl)
-        reasoner.getSubClasses(c, false).getFlattened().each { sub ->
+	c = fac.getOWLObjectIntersectionOf(reg, c)
+
+	reasoner.getEquivalentClasses(c).getEntities().each { sub ->
             def s = sub.toString()
             if (s.startsWith("<http://purl.obolibrary.org/obo/GO_")) {
                 s = s.substring(32, s.length() - 1)
                 negReg[s].add(cls)
             }
         }
+
     }
 }
 
@@ -100,65 +107,34 @@ new File("data/pheno2go.txt").splitEachLine("  ") { items ->
     }
 }
 
-def expCodes = ["EXP", "IDA", "IPI", "IMP", "IGI", "IEP", "TAS", "IC"]
-def annotations = [:].withDefault{ new HashSet() }
-new File("data/gene_association.goa_human").splitEachLine("\t") { items ->
-    if (items.size() > 1) {
-        def mgi = items[2]
-        if (!(items[6] in expCodes) || items[3] == "NOT") {
-            return
-        }
-        if (items[4] != null && items[4].startsWith("GO:")) {
-            def go = items[4].replaceAll(":", "_")
-            annotations[mgi].add(go)
-        }
+def out = new PrintWriter(new BufferedWriter(new FileWriter("data/rules.txt")))
+
+abnPheno.each {go, phenos ->
+    phenos.each { pheno ->
+	out.println("$go\t$pheno\tabnormal");
     }
 }
 
-
-def out = new PrintWriter(new BufferedWriter(new FileWriter("data/predictions_human.txt")))
-
-GParsPool.withPool {
-    annotations.eachParallel { mgi, gos ->
-        gos.each { go ->
-            if (go in abnPheno) {
-                abnPheno[go].each { pheno ->
-                    out.println("$mgi\t$go\t$pheno\t0")
-                }
-            }
-
-            if (go in posReg) {
-                posReg[go].each { g_id ->
-                    if (g_id in decPheno) {
-                        decPheno[g_id].each { pheno ->
-                            out.println("$mgi\t$go\t$pheno\t-1")
-                        }
-                    }
-                    if (g_id in incPheno) { // inconsistent
-                        incPheno[g_id].each { pheno ->
-                            out.println("$mgi\t$go\t$pheno\t2")
-                        }
-                    }
-                }
-            }
-            if (go in negReg) {
-                negReg[go].each { g_id ->
-                    if (g_id in decPheno) {  // inconsistent
-                        decPheno[g_id].each { pheno ->
-                            out.println("$mgi\t$go\t$pheno\t-2")
-                        }
-                    }
-                    if (g_id in incPheno) {
-                        incPheno[g_id].each { pheno ->
-                            out.println("$mgi\t$go\t$pheno\t1")
-                        }
-                    }
-
-                }
-            }
-        }
+posReg.each { go, gos ->
+    gos.each { go_id ->
+	decPheno[go_id].each { pheno ->
+	    out.println("$go\t$pheno\tdecrease");
+	}
+	incPheno[go_id].each { pheno -> 
+	    out.println("$go\t$pheno\tincrease_inconsistent");
+	}
     }
 }
-out.flush()
-out.close()
 
+negReg.each { go, gos ->
+    gos.each { go_id ->
+	decPheno[go_id].each { pheno ->
+	    out.println("$go\t$pheno\tdecrease_inconsistent");
+	}
+	incPheno[go_id].each { pheno ->
+	    out.println("$go\t$pheno\tincrease");
+	}
+    }
+}
+
+out.close();

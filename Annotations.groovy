@@ -88,41 +88,41 @@ GParsPool.withPool {
 def geneAnnots = [:].withDefault {new HashSet<String>()}
 def mgiAnnots = [:].withDefault {new HashSet<String>()}
 
-new File("data/diseases_to_genes_to_phenotypes.txt").eachLine { line ->
-  if (line.startsWith("#")) return;
-  def items = line.split("\t")
-  def gene = items[1]
-  def hp = items[3].replaceAll(":", "_")
-  if (hp in phenos) {
-    geneAnnots[gene].add(hp)
-  }
-}
+// new File("data/diseases_to_genes_to_phenotypes.txt").eachLine { line ->
+//   if (line.startsWith("#")) return;
+//   def items = line.split("\t")
+//   def gene = items[1]
+//   def hp = items[3].replaceAll(":", "_")
+//   if (hp in phenos) {
+//     geneAnnots[gene].add(hp)
+//   }
+// }
 
-new File("data/MGI_GenePheno.rpt").splitEachLine("\t") { items ->
-  pheno = items[4].replaceAll(":", "_")
-  if (pheno in phenos) {
-    def mgis = items[6].split(",")
-    mgis.each { mgi ->
-	    mgiAnnots[mgi].add(pheno)
-    }
-  }
-}
+// new File("data/MGI_GenePheno.rpt").splitEachLine("\t") { items ->
+//   pheno = items[4].replaceAll(":", "_")
+//   if (pheno in phenos) {
+//     def mgis = items[6].split(",")
+//     mgis.each { mgi ->
+// 	    mgiAnnots[mgi].add(pheno)
+//     }
+//   }
+// }
 
-def mp2hp = [:]
-phenomenet.getClassesInSignature().each {
-    cl ->
-    def name = getName(cl);
-    if (name.startsWith("MP_")) {
-	def eClasses = phenomeReasoner.getEquivalentClasses(cl).getEntities()
-	eClasses.each {
-	    ecl ->
-	    eName = getName(ecl)
-	    if (eName.startsWith('HP_')) {
-		mp2hp[name] = eName;
-	    }
-	}
-    }
-}
+// def mp2hp = [:]
+// phenomenet.getClassesInSignature().each {
+//     cl ->
+//     def name = getName(cl);
+//     if (name.startsWith("MP_")) {
+// 	def eClasses = phenomeReasoner.getEquivalentClasses(cl).getEntities()
+// 	eClasses.each {
+// 	    ecl ->
+// 	    eName = getName(ecl)
+// 	    if (eName.startsWith('HP_')) {
+// 		mp2hp[name] = eName;
+// 	    }
+// 	}
+//     }
+// }
 
 
 // def homos = [:]
@@ -169,8 +169,8 @@ phenomenet.getClassesInSignature().each {
 // out.close()
 
 // out = new PrintWriter(new BufferedWriter(new FileWriter("data/mgi_without_phenos.tab")))
-def annotMgis = mgiAnnots.keySet()
-def annotGenes = geneAnnots.keySet()
+// def annotMgis = mgiAnnots.keySet()
+// def annotGenes = geneAnnots.keySet()
 // mgis.each { mgi ->
 //   if (!(mgi in annotMgis)) {
 //     out.println(mgi)
@@ -193,76 +193,76 @@ def annotGenes = geneAnnots.keySet()
 // }
 
 // Remove inconsistent predictions
-removed = 0
-new File("data/predictions_incon.txt").splitEachLine("\t") { items ->
-    def pheno = items[2]
-    def go = items[1]
-    def goLabel = getLabel(go)
-    if (pheno in phenos) {
-	def mgi = items[0]
-	if (mgi in annotMgis) {
-	    children = new HashSet<String>()
-	    children.add(pheno)
-	    getChildren(phenomeReasoner, pheno).each { cl ->
-		def name = getName(cl)
-		if (name.startsWith("MP") || name.startsWith("HP")) {
-		    children.add(name)
-		}
-	    }
-	    children.each {child ->
-		if (child in mgiAnnots[mgi]) {
-		    label = getLabel(child)
-		    mgiAnnots[mgi].remove(child)
-		    println("$mgi\t$go\t$goLabel\t$child\t$label")
-		    removed += 1
-		}
-	    }
-	}
-    }
-}
-println("Removed: $removed")
+// removed = 0
+// new File("data/predictions_incon.txt").splitEachLine("\t") { items ->
+//     def pheno = items[2]
+//     def go = items[1]
+//     def goLabel = getLabel(go)
+//     if (pheno in phenos) {
+// 	def mgi = items[0]
+// 	if (mgi in annotMgis) {
+// 	    children = new HashSet<String>()
+// 	    children.add(pheno)
+// 	    getChildren(phenomeReasoner, pheno).each { cl ->
+// 		def name = getName(cl)
+// 		if (name.startsWith("MP") || name.startsWith("HP")) {
+// 		    children.add(name)
+// 		}
+// 	    }
+// 	    children.each {child ->
+// 		if (child in mgiAnnots[mgi]) {
+// 		    label = getLabel(child)
+// 		    mgiAnnots[mgi].remove(child)
+// 		    println("$mgi\t$go\t$goLabel\t$child\t$label")
+// 		    removed += 1
+// 		}
+// 	    }
+// 	}
+//     }
+// }
+// println("Removed: $removed")
 
 
-// Remove inconsistent predictions human
-removed = 0
-new File("data/predictions_human_incon.txt").splitEachLine("\t") { items ->
-    def pheno = items[2]
-    def go = items[1]
-    def goLabel = getLabel(go)
-    if (pheno in phenos) {
-	def gene = items[0]
-	if (gene in annotGenes) {
-	    children = new HashSet<String>()
-	    children.add(pheno)
-	    getChildren(phenomeReasoner, pheno).each { cl ->
-		def name = getName(cl)
-		if (name.startsWith("MP") || name.startsWith("HP")) {
-		    children.add(name)
-		}
-	    }
-	    if (pheno in mp2hp) {
-		def hp = mp2hp[pheno]
-		children.add(hp)
-		getChildren(phenomeReasoner, hp).each { cl ->
-		    def name = getName(cl)
-		    if (name.startsWith("MP") || name.startsWith("HP")) {
-			children.add(name)
-		    }
-		}
-	    }
+// // Remove inconsistent predictions human
+// removed = 0
+// new File("data/predictions_human_incon.txt").splitEachLine("\t") { items ->
+//     def pheno = items[2]
+//     def go = items[1]
+//     def goLabel = getLabel(go)
+//     if (pheno in phenos) {
+// 	def gene = items[0]
+// 	if (gene in annotGenes) {
+// 	    children = new HashSet<String>()
+// 	    children.add(pheno)
+// 	    getChildren(phenomeReasoner, pheno).each { cl ->
+// 		def name = getName(cl)
+// 		if (name.startsWith("MP") || name.startsWith("HP")) {
+// 		    children.add(name)
+// 		}
+// 	    }
+// 	    if (pheno in mp2hp) {
+// 		def hp = mp2hp[pheno]
+// 		children.add(hp)
+// 		getChildren(phenomeReasoner, hp).each { cl ->
+// 		    def name = getName(cl)
+// 		    if (name.startsWith("MP") || name.startsWith("HP")) {
+// 			children.add(name)
+// 		    }
+// 		}
+// 	    }
 	    
-	    children.each {child ->
-		if (child in geneAnnots[gene]) {
-		    label = getLabel(child)
-		    geneAnnots[gene].remove(child)
-		    println("$gene\t$go\t$goLabel\t$child\t$label")
-		    removed += 1
-		}
-	    }
-	}
-    }
-}
-println("Removed: $removed")
+// 	    children.each {child ->
+// 		if (child in geneAnnots[gene]) {
+// 		    label = getLabel(child)
+// 		    geneAnnots[gene].remove(child)
+// 		    println("$gene\t$go\t$goLabel\t$child\t$label")
+// 		    removed += 1
+// 		}
+// 	    }
+// 	}
+//     }
+// }
+// println("Removed: $removed")
 
 // Remove general terms and leave only specific
 
@@ -292,17 +292,17 @@ println("Removed: $removed")
 
 
 // Add predicted annotations
-// mgiAnnots = [:].withDefault {new HashSet<String>()}
+mgiAnnots = [:].withDefault {new HashSet<String>()}
 
-// new File("data/predictions_filtered.txt").splitEachLine("\t") { items ->
-//   pheno = items[2]
-//   if (pheno in phenos) {
-//     def mgi = items[0]
-//     if (mgi in mgis) {
-//       mgiAnnots[mgi].add(pheno)
-//     }
-//   }
-// }
+new File("data/predictions_filtered.txt").splitEachLine("\t") { items ->
+  pheno = items[2]
+  if (pheno in phenos) {
+    def mgi = items[0]
+    //if (mgi in mgis) {
+      mgiAnnots[mgi].add(pheno)
+    //}
+  }
+}
 
 // Remove general terms and leave only specific
 
@@ -318,14 +318,14 @@ println("Removed: $removed")
 //   }
 // }
 
-// out = new PrintWriter(new BufferedWriter(new FileWriter("data/mgi_annotations_only_pred.tab")))
-// mgiAnnots.each { mgi, annots ->
-//   if (mgi in mgis) {
-//     out.print(mgi)
-//     annots.each { pheno ->
-//       out.print("\t" + pheno)
-//     }
-//     out.println()
-//   }
-// }
-// out.close()
+out = new PrintWriter(new BufferedWriter(new FileWriter("data/mgi_annotations_pred.tab")))
+mgiAnnots.each { mgi, annots ->
+//  if (mgi in mgis) {
+    out.print(mgi)
+    annots.each { pheno ->
+      out.print("\t" + pheno)
+    }
+    out.println()
+//  }
+}
+out.close()
