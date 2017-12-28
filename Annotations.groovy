@@ -319,10 +319,10 @@ new File("data/predictions_human_filtered.txt").splitEachLine("\t") { items ->
 // }
 
 out = new PrintWriter(new BufferedWriter(new FileWriter("data/human_annotations_only_pred.tab")))
-annots.each { gene, annots ->
+annots.each { gene, annot ->
 //  if (mgi in mgis) {
     out.print(gene)
-    annots.each { pheno ->
+    annot.each { pheno ->
       out.print("\t" + pheno)
     }
     out.println()
