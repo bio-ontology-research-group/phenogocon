@@ -72,42 +72,42 @@ phenomenet.getClassesInSignature().each {
 annotations = [:].withDefault { new HashSet<String>() }
 predictions = [:].withDefault { new HashSet<String>() }
 
-new File("data/MGI_GenePheno.rpt").splitEachLine("\t") { items ->
-    pheno = items[4].replaceAll(":", "_")
-    anchestors = new HashSet<String>()
-    anchestors.add(pheno)
-    getAnchestors(phenomeReasoner, pheno).each { cl ->
-        def name = getName(cl)
-        if (name.startsWith("MP") || name.startsWith("HP")) {
-            anchestors.add(name)
-        }
-    }
-
-    mgis = items[6].split(",")
-    mgis.each { mgi ->
-        annotations[mgi].addAll(anchestors)
-    }
-}
-
-// new File("data/diseases_to_genes_to_phenotypes.txt").eachLine { line ->
-//     if (line.startsWith("#")) return;
-//     def items = line.split("\t")
-//     def gene = items[1]
-//     def hp = items[3].replaceAll(":", "_")
+// new File("data/MGI_GenePheno.rpt").splitEachLine("\t") { items ->
+//     pheno = items[4].replaceAll(":", "_")
 //     anchestors = new HashSet<String>()
-//     anchestors.add(hp)
-//     getAnchestors(phenomeReasoner, hp).each { cl ->
+//     anchestors.add(pheno)
+//     getAnchestors(phenomeReasoner, pheno).each { cl ->
 //         def name = getName(cl)
 //         if (name.startsWith("MP") || name.startsWith("HP")) {
 //             anchestors.add(name)
 //         }
 //     }
-    
-//     annotations[gene].addAll(anchestors)
-    
+
+//     mgis = items[6].split(",")
+//     mgis.each { mgi ->
+//         annotations[mgi].addAll(anchestors)
+//     }
 // }
 
-new File("data/predictions_incon.txt").splitEachLine("\t") { items ->
+new File("data/diseases_to_genes_to_phenotypes.txt").eachLine { line ->
+    if (line.startsWith("#")) return;
+    def items = line.split("\t")
+    def gene = items[1]
+    def hp = items[3].replaceAll(":", "_")
+    anchestors = new HashSet<String>()
+    anchestors.add(hp)
+    getAnchestors(phenomeReasoner, hp).each { cl ->
+        def name = getName(cl)
+        if (name.startsWith("MP") || name.startsWith("HP")) {
+            anchestors.add(name)
+        }
+    }
+    
+    annotations[gene].addAll(anchestors)
+    
+}
+
+new File("data/predictions_human_incon.txt").splitEachLine("\t") { items ->
     pheno = items[2].replaceAll(":", "_")
     anchestors = new HashSet<String>()
     anchestors.add(pheno)
