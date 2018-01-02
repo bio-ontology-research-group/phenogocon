@@ -85,27 +85,27 @@ GParsPool.withPool {
   }
 }
 
-def annots = [:].withDefault {new HashSet<String>()}
+def geneAnnots = [:].withDefault {new HashSet<String>()}
 def mgiAnnots = [:].withDefault {new HashSet<String>()}
 
 new File("data/diseases_to_genes_to_phenotypes.txt").eachLine { line ->
-  if (line.startsWith("#")) return;
-  def items = line.split("\t")
-  def gene = items[1]
-  def hp = items[3].replaceAll(":", "_")
-  if (hp in phenos) {
-    annots[gene].add(hp)
-  }
+    if (line.startsWith("#")) return;
+    def items = line.split("\t")
+    def gene = items[1]
+    def hp = items[3].replaceAll(":", "_")
+    if (hp in phenos) {
+	geneAnnots[gene].add(hp)
+    }
 }
 
 new File("data/MGI_GenePheno.rpt").splitEachLine("\t") { items ->
-  pheno = items[4].replaceAll(":", "_")
-  if (pheno in phenos) {
-    def mgis = items[6].split(",")
-    mgis.each { mgi ->
+    pheno = items[4].replaceAll(":", "_")
+    if (pheno in phenos) {
+	def mgis = items[6].split(",")
+	mgis.each { mgi ->
 	    mgiAnnots[mgi].add(pheno)
+	}
     }
-  }
 }
 
 // def mp2hp = [:]
