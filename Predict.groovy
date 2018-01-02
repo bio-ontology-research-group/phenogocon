@@ -23,7 +23,7 @@ new File("data/gene_association.mgi").splitEachLine("\t") { items ->
 }
 
 
-out = new PrintWriter(new BufferedWriter(new FileWriter("data/predictions.txt")))
+out = new PrintWriter(new BufferedWriter(new FileWriter("data/predictions_human.txt")))
 
 annotations.each { gene, gos ->
     gos.each { go ->

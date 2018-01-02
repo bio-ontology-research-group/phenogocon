@@ -89,7 +89,7 @@ predictions = [:].withDefault { new HashSet<String>() }
 //     }
 // }
 
-new File("data/diseases_to_genes_to_phenotypes.txt").eachLine { line ->
+new File("data/genes_to_phenotype.txt").eachLine { line ->
     if (line.startsWith("#")) return;
     def items = line.split("\t")
     def gene = items[1]

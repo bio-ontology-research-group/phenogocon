@@ -98,15 +98,15 @@ new File("data/diseases_to_genes_to_phenotypes.txt").eachLine { line ->
   }
 }
 
-// new File("data/MGI_GenePheno.rpt").splitEachLine("\t") { items ->
-//   pheno = items[4].replaceAll(":", "_")
-//   if (pheno in phenos) {
-//     def mgis = items[6].split(",")
-//     mgis.each { mgi ->
-// 	    mgiAnnots[mgi].add(pheno)
-//     }
-//   }
-// }
+new File("data/MGI_GenePheno.rpt").splitEachLine("\t") { items ->
+  pheno = items[4].replaceAll(":", "_")
+  if (pheno in phenos) {
+    def mgis = items[6].split(",")
+    mgis.each { mgi ->
+	    mgiAnnots[mgi].add(pheno)
+    }
+  }
+}
 
 // def mp2hp = [:]
 // phenomenet.getClassesInSignature().each {
@@ -132,29 +132,42 @@ new File("data/diseases_to_genes_to_phenotypes.txt").eachLine { line ->
 //   homos[homo_id] = mgi
 // }
 
-// def omims = new HashSet<String>();
-// def mgis = new HashSet<String>();
-// new File("data/mgi_omim.tab").eachLine { line ->
-//   if (line.startsWith("#")) return;
-//   def items = line.split("\t")
-//   omims.add(items[0])
-//   // def homo_id = items[2]
-//   // if (homo_id in homos) {
-//   mgis.add(items[7])
-//   // }
-// }
+def omims = new HashSet<String>();
+def mgis = new HashSet<String>();
+new File("data/mgi_omim.tab").eachLine { line ->
+  if (line.startsWith("#")) return;
+  def items = line.split("\t")
+  omims.add(items[0])
+  mgis.add(items[7])
+}
 
-// def out = new PrintWriter(new BufferedWriter(new FileWriter("data/mgi_annotations.tab")))
-// mgiAnnots.each { mgi, annots ->
-//   if (mgi in mgis) {
-//     out.print(mgi)
-//     annots.each { pheno ->
-//       out.print("\t" + pheno)
+
+// Add predicted annotations
+// mgiAnnots = [:].withDefault {new HashSet<String>()}
+
+// new File("data/predictions_filtered.txt").splitEachLine("\t") { items ->
+//   pheno = items[2]
+//   if (pheno in phenos) {
+//     def gene = items[0]
+//     if (gene in mgis) {
+//       mgiAnnots[gene].add(pheno)
 //     }
-//     out.println()
 //   }
 // }
-// out.close()
+
+
+def out = new PrintWriter(new BufferedWriter(new FileWriter("data/mgi_annotations_gd.tab")))
+mgiAnnots.each { mgi, annots ->
+  if (mgi in mgis) {
+    out.print(mgi)
+    annots.each { pheno ->
+      out.print("\t" + pheno)
+    }
+    out.println()
+  }
+}
+out.close()
+
 
 // out = new PrintWriter(new BufferedWriter(new FileWriter("data/omim_annotations.tab")))
 // omimAnnots.each { omim, annots ->
@@ -292,17 +305,17 @@ new File("data/diseases_to_genes_to_phenotypes.txt").eachLine { line ->
 
 
 // Add predicted annotations
-annots = [:].withDefault {new HashSet<String>()}
+// annots = [:].withDefault {new HashSet<String>()}
 
-new File("data/predictions_human_filtered.txt").splitEachLine("\t") { items ->
-  pheno = items[2]
-  if (pheno in phenos) {
-    def gene = items[0]
-    //if (mgi in mgis) {
-      annots[gene].add(pheno)
-    //}
-  }
-}
+// new File("data/predictions_human_filtered.txt").splitEachLine("\t") { items ->
+//   pheno = items[2]
+//   if (pheno in phenos) {
+//     def gene = items[0]
+//     if (gene in mgis) {
+//       annots[gene].add(pheno)
+//     }
+//   }
+// }
 
 // Remove general terms and leave only specific
 
@@ -318,14 +331,12 @@ new File("data/predictions_human_filtered.txt").splitEachLine("\t") { items ->
 //   }
 // }
 
-out = new PrintWriter(new BufferedWriter(new FileWriter("data/human_annotations_only_pred.tab")))
-annots.each { gene, annot ->
-//  if (mgi in mgis) {
-    out.print(gene)
-    annot.each { pheno ->
-      out.print("\t" + pheno)
-    }
-    out.println()
-//  }
-}
-out.close()
+// out = new PrintWriter(new BufferedWriter(new FileWriter("data/human_annotations_only_pred.tab")))
+// annots.each { gene, annot ->
+//     out.print(gene)
+//     annot.each { pheno ->
+//       out.print("\t" + pheno)
+//     }
+//     out.println()
+// }
+// out.close()

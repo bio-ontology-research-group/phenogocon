@@ -28,7 +28,7 @@ System.setProperty("jdk.xml.entityExpansionLimit", "0");
 System.setProperty("jdk.xml.totalEntitySizeLimit", "0");
 
 def factory = URIFactoryMemory.getSingleton()
-def annotationsPath = "data/mgi_annotations.tab";
+def annotationsPath = "data/mgi_annotations_gd.tab";
 def omimPath = "data/omim_annotations.tab";
 def resSimPath = "data/sim_gene_disease.txt";
 
@@ -67,10 +67,10 @@ def getPhenomenet = {
   URI virtualRoot = factory.getURI("http://purl.obolibrary.org/obo/virtualRoot")
   graph.addV(virtualRoot)
 
-  new File(annotationsPath).splitEachLine('\t') { items ->
-    String geneId = items[0].replaceAll(":", "_");
+  new File(omimPath).splitEachLine('\t') { items ->
+    String disId = items[0].replaceAll(":", "_");
     for (int i = 1; i < items.size(); i++) {
-      URI idURI = factory.getURI("http://purl.obolibrary.org/obo/" + geneId);
+      URI idURI = factory.getURI("http://purl.obolibrary.org/obo/" + disId);
       String pheno = items[i];
       URI phenoURI = factory.getURI("http://purl.obolibrary.org/obo/" + pheno);
       Edge e = new Edge(idURI, RDF.TYPE, phenoURI);
