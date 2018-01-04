@@ -1,5 +1,5 @@
 def rules = [:].withDefault {new HashSet()}
-new File("data/rules.txt").splitEachLine("\t") { items ->
+new File("data/rules_prop.txt").splitEachLine("\t") { items ->
     def go = items[0]
     def pheno = items[1]
     def qual = items[2]
@@ -9,9 +9,9 @@ new File("data/rules.txt").splitEachLine("\t") { items ->
 
 def expCodes = ["EXP", "IDA", "IPI", "IMP", "IGI", "IEP", "TAS", "IC"]
 def annotations = [:].withDefault{ new HashSet() }
-new File("data/gene_association.mgi").splitEachLine("\t") { items ->
+new File("data/goa_human.gaf").splitEachLine("\t") { items ->
     if (items.size() > 1) {
-        def gene = items[1]
+        def gene = items[2]
         if (!(items[6] in expCodes) || items[3] == "NOT") {
             return
         }

@@ -49,6 +49,14 @@ def getAnchestors = { reasoner, term_id ->
     return res
 }
 
+def getChildren = { reasoner, term_id ->
+    IRI iri = IRI.create("http://purl.obolibrary.org/obo/$term_id")
+    OWLClass cl = dataFactory.getOWLClass(iri)
+    def res = reasoner.getSubClasses(cl, false).getFlattened()
+    return res
+}
+
+
 def getName = { cl ->
   return shortFormProvider.getShortForm(cl)
 }
@@ -70,74 +78,69 @@ phenomenet.getClassesInSignature().each {
 }
 
 annotations = [:].withDefault { new HashSet<String>() }
-predictions = [:].withDefault { new HashSet<String>() }
+predictions = [:].withDefault { [:].withDefault { new HashSet<String>() } }
 
-// new File("data/MGI_GenePheno.rpt").splitEachLine("\t") { items ->
-//     pheno = items[4].replaceAll(":", "_")
+
+new File("data/predictions_filtered.txt").splitEachLine("\t") { items ->
+    def pheno = items[2].replaceAll(":", "_")
+    def children = new HashSet<String>()
+    children.add(pheno)
+    getChildren(phenomeReasoner, pheno).each { cl ->
+        def name = getName(cl)
+        if (name.startsWith("MP") || name.startsWith("HP")) {
+            children.add(name)
+        }
+    }
+    gene = items[0]
+    annot = items[1]
+    predictions[gene][annot].addAll(children)
+}
+
+new File("data/MGI_GenePheno.rpt").splitEachLine("\t") { items ->
+    pheno = items[4].replaceAll(":", "_")
+    anchestors = new HashSet<String>()
+    anchestors.add(pheno)
+    getAnchestors(phenomeReasoner, pheno).each { cl ->
+        def name = getName(cl)
+        if (name.startsWith("MP") || name.startsWith("HP")) {
+            anchestors.add(name)
+        }
+    }
+
+    mgis = items[6].split(",")
+    mgis.each { mgi ->
+	if (mgi in predictions) {
+	    predictions[mgi].each { go_id, phenos ->
+		if (anchestors.intersect(phenos).size() > 0) {
+		    println("$mgi\t$go_id\t$pheno");
+		}
+	    }
+	}
+        annotations[mgi].addAll(anchestors)
+    }
+}
+
+// new File("data/genes_to_phenotype.txt").eachLine { line ->
+//     if (line.startsWith("#")) return;
+//     def items = line.split("\t")
+//     def gene = items[1]
+//     def hp = items[3].replaceAll(":", "_")
 //     anchestors = new HashSet<String>()
-//     anchestors.add(pheno)
-//     getAnchestors(phenomeReasoner, pheno).each { cl ->
+//     anchestors.add(hp)
+//     getAnchestors(phenomeReasoner, hp).each { cl ->
 //         def name = getName(cl)
 //         if (name.startsWith("MP") || name.startsWith("HP")) {
 //             anchestors.add(name)
 //         }
 //     }
 
-//     mgis = items[6].split(",")
-//     mgis.each { mgi ->
-//         annotations[mgi].addAll(anchestors)
+//     if (gene in predictions) {
+// 	predictions[gene].each { go_id, phenos ->
+// 	    if (anchestors.intersect(phenos).size() > 0) {
+// 		println("$gene\t$go_id\t$hp");
+// 	    }
+// 	}
 //     }
+//     annotations[gene].addAll(anchestors)
+    
 // }
-
-new File("data/genes_to_phenotype.txt").eachLine { line ->
-    if (line.startsWith("#")) return;
-    def items = line.split("\t")
-    def gene = items[1]
-    def hp = items[3].replaceAll(":", "_")
-    anchestors = new HashSet<String>()
-    anchestors.add(hp)
-    getAnchestors(phenomeReasoner, hp).each { cl ->
-        def name = getName(cl)
-        if (name.startsWith("MP") || name.startsWith("HP")) {
-            anchestors.add(name)
-        }
-    }
-    
-    annotations[gene].addAll(anchestors)
-    
-}
-
-new File("data/predictions_human_incon.txt").splitEachLine("\t") { items ->
-    pheno = items[2].replaceAll(":", "_")
-    anchestors = new HashSet<String>()
-    anchestors.add(pheno)
-    // getAnchestors(phenomeReasoner, pheno).each { cl ->
-    //     def name = getName(cl)
-    //     if (name.startsWith("MP") || name.startsWith("HP")) {
-    //         anchestors.add(name)
-    //     }
-    // }
-    gene = items[0]
-    annot = items[1]
-    if (pheno in annotations[gene]) {
-	println("$gene\t$annot\t$pheno")
-    }
-    predictions[gene].addAll(anchestors)
-}
-
-def genes = predictions.keySet()
-
-def total = 0
-def tp_total = 0
-def f = 0.0
-def p = 0.0
-def r = 0.0
-
-genes.each { gene ->
-    def annots = annotations[gene]
-    def preds = predictions[gene]
-    def tp = annots.intersect(preds).size()
-    tp_total += tp
-    total += preds.size()
-}
-println("$total $tp_total" + " " + (tp_total / total))

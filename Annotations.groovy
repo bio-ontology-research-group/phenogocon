@@ -88,15 +88,15 @@ GParsPool.withPool {
 def geneAnnots = [:].withDefault {new HashSet<String>()}
 def mgiAnnots = [:].withDefault {new HashSet<String>()}
 
-new File("data/diseases_to_genes_to_phenotypes.txt").eachLine { line ->
-    if (line.startsWith("#")) return;
-    def items = line.split("\t")
-    def gene = items[1]
-    def hp = items[3].replaceAll(":", "_")
-    if (hp in phenos) {
-	geneAnnots[gene].add(hp)
-    }
-}
+// new File("data/genes_to_phenotypes.txt").eachLine { line ->
+//     if (line.startsWith("#")) return;
+//     def items = line.split("\t")
+//     def gene = items[1]
+//     def hp = items[3].replaceAll(":", "_")
+//     if (hp in phenos) {
+// 	geneAnnots[gene].add(hp)
+//     }
+// }
 
 new File("data/MGI_GenePheno.rpt").splitEachLine("\t") { items ->
     pheno = items[4].replaceAll(":", "_")
@@ -312,7 +312,7 @@ out.close()
 //   if (pheno in phenos) {
 //     def gene = items[0]
 //     if (gene in mgis) {
-//       annots[gene].add(pheno)
+//       geneAnnots[gene].add(pheno)
 //     }
 //   }
 // }
@@ -332,7 +332,7 @@ out.close()
 // }
 
 // out = new PrintWriter(new BufferedWriter(new FileWriter("data/human_annotations_only_pred.tab")))
-// annots.each { gene, annot ->
+// geneAnnots.each { gene, annot ->
 //     out.print(gene)
 //     annot.each { pheno ->
 //       out.print("\t" + pheno)

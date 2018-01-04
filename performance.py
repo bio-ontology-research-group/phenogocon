@@ -18,15 +18,15 @@ def main():
 
 
 def run():
-    # gd = gene_disease()
+    gd = gene_disease()
     genes = load_genes()
-    ppi = load_ppi()
-    # diseases = load_diseases()
+    # ppi = load_ppi()
+    diseases = load_diseases()
     scores = load_scores()
     associations = list()
     for i in xrange(len(genes)):
-        for j in xrange(len(genes)):
-            if genes[i] in ppi and genes[j] in ppi[genes[i]]:
+        for j in xrange(len(diseases)):
+            if genes[i] in gd and diseases[j] in gd[genes[i]]:
                 associations.append(1)
             else:
                 associations.append(0)
@@ -38,7 +38,7 @@ def run():
 def load_ppi():
     res = dict()
     mapping = dict()
-    with open('data/mgi2string.tab') as f:
+    with open('data/human2string.tab') as f:
         for line in f:
             it = line.strip().split('\t')
             st = it[0]
@@ -46,7 +46,7 @@ def load_ppi():
             if st not in mapping:
                 mapping[st] = list()
             mapping[st].append(mgi)
-    with gzip.open('data/10090.protein.links.v10.5.txt.gz') as f:
+    with gzip.open('data/9606.protein.links.v10.5.txt.gz') as f:
         next(f)
         for line in f:
             it = line.strip().split()
@@ -98,7 +98,7 @@ def gene_disease():
 
 def load_scores():
     scores = list()
-    with open('data/sim_ppi.txt') as f:
+    with open('data/sim_gene_disease_with_pred.txt') as f:
         for line in f:
             scores.append(float(line.strip()))
     scores = (np.array(scores) - min(scores)) / (max(scores) - min(scores))
@@ -106,11 +106,21 @@ def load_scores():
 
 
 def load_genes():
+    # mapping = dict()
+    # with open('data/genes_to_phenotype.txt') as f:
+    #     next(f)
+    #     for line in f:
+    #         it = line.strip().split('\t')
+    #         mapping[it[1]] = it[0]
     genes = list()
-    with open('data/mgi_annotations.tab') as f:
+    with open('data/mgi_annotations_gd_with_pred.tab') as f:
         for line in f:
             items = line.strip().split('\t')
             genes.append(items[0])
+            # if items[0] in mapping:
+            #     genes.append(mapping[items[0]])
+            # else:
+            #     genes.append(items[0])
     return genes
 
 
@@ -137,7 +147,7 @@ def compute_roc(scores, test):
     plt.ylim([0.0, 1.05])
     plt.xlabel('False Positive Rate')
     plt.ylabel('True Positive Rate')
-    plt.title('ROC Curve BMA Resnik - Mouse PPI')
+    plt.title('ROC Curve BMA Resnik - Mouse Gene-Disease With Predictions')
     plt.legend(loc="lower right")
     plt.show()
     return roc_auc
