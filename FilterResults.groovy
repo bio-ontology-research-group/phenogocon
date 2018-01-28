@@ -13,7 +13,7 @@ FUNCS = [
 
 FILTER = ["increase_inconsistent", "decrease_inconsistent"].toSet()
 
-new File("data/predictions_deep_mouse.txt").eachLine() { line ->
+new File("data/predictions_human.txt").eachLine() { line ->
     def items = line.trim().split("\t")
     if (!(items[3] in FILTER)) {
         println(line)

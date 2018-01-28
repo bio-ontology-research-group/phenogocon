@@ -91,49 +91,65 @@ GParsPool.withPool {
     }
 }
 
-def incPheno = [:].withDefault { new HashSet<String>() }
-def decPheno = [:].withDefault { new HashSet<String>() }
-def abnPheno = [:].withDefault { new HashSet<String>() }
+// def incPheno = [:].withDefault { new HashSet<String>() }
+// def decPheno = [:].withDefault { new HashSet<String>() }
+// def abnPheno = [:].withDefault { new HashSet<String>() }
 
-new File("data/pheno2go.txt").splitEachLine("  ") { items ->
-    def pheno = items[0]
-    def go = items[1]
-    if (items[2] == "1") {          // increase
-        incPheno[go].add(pheno)
-    } else if (items[2] == "-1") {  // decrease
-        decPheno[go].add(pheno)
-    } else {                        // abnormal
-        abnPheno[go].add(pheno)
-    }
-}
+// new File("data/pheno2go.txt").splitEachLine("  ") { items ->
+//     def pheno = items[0]
+//     def go = items[1]
+//     if (items[2] == "1") {          // increase
+//         incPheno[go].add(pheno)
+//     } else if (items[2] == "-1") {  // decrease
+//         decPheno[go].add(pheno)
+//     } else {                        // abnormal
+//         abnPheno[go].add(pheno)
+//     }
+// }
 
-def out = new PrintWriter(new BufferedWriter(new FileWriter("data/rules.txt")))
+// def out = new PrintWriter(new BufferedWriter(new FileWriter("data/rules.txt")))
 
-abnPheno.each {go, phenos ->
-    phenos.each { pheno ->
-	out.println("$go\t$pheno\tabnormal");
-    }
-}
+// abnPheno.each {go, phenos ->
+//     phenos.each { pheno ->
+// 	out.println("$go\t$pheno\tabnormal");
+//     }
+// }
+
+// posReg.each { go, gos ->
+//     gos.each { go_id ->
+// 	decPheno[go_id].each { pheno ->
+// 	    out.println("$go\t$pheno\tdecrease");
+// 	}
+// 	incPheno[go_id].each { pheno -> 
+// 	    out.println("$go\t$pheno\tincrease_inconsistent");
+// 	}
+//     }
+// }
+
+// negReg.each { go, gos ->
+//     gos.each { go_id ->
+// 	decPheno[go_id].each { pheno ->
+// 	    out.println("$go\t$pheno\tdecrease_inconsistent");
+// 	}
+// 	incPheno[go_id].each { pheno ->
+// 	    out.println("$go\t$pheno\tincrease");
+// 	}
+//     }
+// }
+
+// out.close();
+
+def out = new PrintWriter(new BufferedWriter(new FileWriter("data/regulations.txt")))
 
 posReg.each { go, gos ->
     gos.each { go_id ->
-	decPheno[go_id].each { pheno ->
-	    out.println("$go\t$pheno\tdecrease");
-	}
-	incPheno[go_id].each { pheno -> 
-	    out.println("$go\t$pheno\tincrease_inconsistent");
-	}
+	out.println("$go\t$go_id\tpos");
     }
 }
 
 negReg.each { go, gos ->
     gos.each { go_id ->
-	decPheno[go_id].each { pheno ->
-	    out.println("$go\t$pheno\tdecrease_inconsistent");
-	}
-	incPheno[go_id].each { pheno ->
-	    out.println("$go\t$pheno\tincrease");
-	}
+	out.println("$go\t$go_id\tneg");
     }
 }
 

@@ -49,6 +49,7 @@ def getLabel = { term_id ->
     }
     return "";
 }
+
 def getAnchestors = { reasoner, term_id ->
     IRI iri = IRI.create("http://purl.obolibrary.org/obo/$term_id")
     OWLClass cl = dataFactory.getOWLClass(iri)
@@ -76,16 +77,23 @@ def getName = { cl ->
 
 def phenos = new HashSet<String>();
 
-GParsPool.withPool {
-  phenomenet.getClassesInSignature(true).eachParallel { cl ->
-    def name = getName(cl)
-    if (name.startsWith("MP") || name.startsWith("HP")) {
-      phenos.add(name)
-    }
-  }
+new File("data/phenos.tab").eachLine { line ->
+    def pheno = line.trim()
+    phenos.add(pheno)
 }
 
 def mgiAnnots = [:].withDefault {new HashSet<String>()}
+def omimAnnots = [:].withDefault {new HashSet<String>()}
+
+
+new File("data/phenotype_annotation.tab").splitEachLine("\t") { items ->
+    if (items[0] != "OMIM") return;
+    def omim = items[0] + ":" + items[1];
+    pheno = items[4].replaceAll(":", "_")
+    if (pheno in phenos) {
+	omimAnnots[omim].add(pheno)
+    }
+}
 
 new File("data/MGI_GenePheno.rpt").splitEachLine("\t") { items ->
     pheno = items[4].replaceAll(":", "_")
@@ -97,62 +105,57 @@ new File("data/MGI_GenePheno.rpt").splitEachLine("\t") { items ->
     }
 }
 
-// def omims = new HashSet<String>();
-// def mgis = new HashSet<String>();
-// new File("data/mgi_omim.tab").eachLine { line ->
-//   if (line.startsWith("#")) return;
-//   def items = line.split("\t")
-//   omims.add(items[0])
-//   mgis.add(items[7])
-// }
+def omims = new HashSet<String>();
+def mgis = new HashSet<String>();
+new File("data/mgi_omim.tab").eachLine { line ->
+  if (line.startsWith("#")) return;
+    def items = line.split("\t")
+    for (def omim: items[2].split("\\|")) { 
+	if (omim != "") omims.add(omim)
+    }
+    mgis.add(items[8])
+}
 
 
 // Add predicted annotations
-predAnnots = [:].withDefault {new HashSet<String>()}
+// mgiAnnots = [:].withDefault {new HashSet<String>()}
 
-new File("data/predictions_filtered.txt").splitEachLine("\t") { items ->
-  pheno = items[2]
-  if (pheno in phenos) {
-    def gene = items[0]
-   // if (gene in mgis) {	
-      predAnnots[gene].add(pheno)
-   // }
-  }
-}
+// new File("data/predictions_filtered.txt").splitEachLine("\t") { items ->
+//   pheno = items[2]
+//   if (pheno in phenos) {
+//     def gene = items[0]
+//     if (gene in mgis) {	
+//       mgiAnnots[gene].add(pheno)
+//     }
+//   }
+// }
+
+// new File("data/inferred-phenos.txt").splitEachLine("\t") { items ->
+//   pheno = items[2]
+//   if (pheno in phenos) {
+//     def gene = items[0]
+//     if (gene in mgis) {	
+//       mgiAnnots[gene].add(pheno)
+//     }
+//   }
+// }
 
 // Remove general terms and leave only specific
 
-predAnnots.keySet().each { mgi ->
-  def annots = predAnnots[mgi].collect()
-  annots.each { pheno ->
-    getAnchestors(phenomeReasoner, pheno).each { anch ->
-      anch = getName(anch)
-      if (anch in predAnnots[mgi]) {
-        predAnnots[mgi].remove(anch)
-      }
-    }
-  }
-}
-
-def out = new PrintWriter(new BufferedWriter(new FileWriter("data/mgi_pred_annotations.tab")))
-mgiAnnots.each { mgi, annots ->
-  if (mgi in predAnnots) {
-    out.print(mgi)
-    annots.each { pheno ->
-      out.print("\t" + pheno)
-    }
-    out.println()
-    out.print(mgi)
-    predAnnots[mgi].each { pheno ->
-      out.print("\t" + pheno)
-    }
-    out.println()
-  }
-}
-out.close()
+// mgiAnnots.keySet().each { mgi ->
+//   def annots = mgiAnnots[mgi].collect()
+//   annots.each { pheno ->
+//     getAnchestors(phenomeReasoner, pheno).each { anch ->
+//       anch = getName(anch)
+//       if (anch in mgiAnnots[mgi]) {
+//         mgiAnnots[mgi].remove(anch)
+//       }
+//     }
+//   }
+// }
 
 
-// def out = new PrintWriter(new BufferedWriter(new FileWriter("data/mgi_annotations.tab")))
+// def out = new PrintWriter(new BufferedWriter(new FileWriter("data/mgi_annotations_gd.tab")))
 // mgiAnnots.each { mgi, annots ->
 //   if (mgi in mgis) {
 //     out.print(mgi)
@@ -165,14 +168,14 @@ out.close()
 // out.close()
 
 
-// out = new PrintWriter(new BufferedWriter(new FileWriter("data/omim_annotations.tab")))
-// omimAnnots.each { omim, annots ->
-//   if (omim in omims) {
-//     out.print(omim)
-//     annots.each { pheno ->
-//       out.print("\t" + pheno)
-//     }
-//     out.println()
-//   }
-// }
-// out.close()
+out = new PrintWriter(new BufferedWriter(new FileWriter("data/omim_annotations.tab")))
+omimAnnots.each { omim, annots ->
+  if (omim in omims) {
+    out.print(omim)
+    annots.each { pheno ->
+      out.print("\t" + pheno)
+    }
+    out.println()
+  }
+}
+out.close()

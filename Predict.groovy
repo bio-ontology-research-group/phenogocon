@@ -9,20 +9,20 @@ new File("data/rules_prop.txt").splitEachLine("\t") { items ->
 
 def expCodes = ["EXP", "IDA", "IPI", "IMP", "IGI", "IEP", "TAS", "IC"]
 def annotations = [:].withDefault{ new HashSet() }
-new File("data/mouse_deepannots.tab").splitEachLine("\t") { items ->
-    // if (items.size() > 1) {
-    //     def gene = items[1]
-    //     if (!(items[6] in expCodes) || items[3] == "NOT") { // Filter out electronic annotations
-    //         return
-    //     }
-    // 	if (items[15] != null && items[15].indexOf("CL:") != -1) { // Filter out annotations for specific cell part
-    // 	    return;
-    // 	}
-    //     if (items[4] != null && items[4].startsWith("GO:")) {
-    //         def go = items[4].replaceAll(":", "_")
-    //         annotations[gene].add(go)
-    //     }
-    // }
+new File("data/goa_human.gaf").splitEachLine("\t") { items ->
+    if (items.size() > 1) {
+        def gene = items[2]
+        if (!(items[6] in expCodes) || items[3] == "NOT") { // Filter out electronic annotations
+            return
+        }
+    	if (items[15] != null && items[15].indexOf("CL:") != -1) { // Filter out annotations for specific cell part
+    	    return;
+    	}
+        if (items[4] != null && items[4].startsWith("GO:")) {
+            def go = items[4].replaceAll(":", "_")
+            annotations[gene].add(go)
+        }
+    }
 
     gene = items[0]
     for (int i = 1; i < items.size(); i++) {
@@ -31,7 +31,7 @@ new File("data/mouse_deepannots.tab").splitEachLine("\t") { items ->
 }
 
 
-out = new PrintWriter(new BufferedWriter(new FileWriter("data/predictions_deep_mouse.txt")))
+out = new PrintWriter(new BufferedWriter(new FileWriter("data/predictions_prop_human.txt")))
 
 annotations.each { gene, gos ->
     gos.each { go ->
