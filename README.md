@@ -8,13 +8,13 @@ of predicting HPO and MPO phenotypes from GO functions for mouse and human
 
 ## Data
 
-* pheno2go.txt - Correspondence of Phenotype and GO classes extracted
+* [pheno2go.txt](https://github.com/bio-ontology-research-group/phenogocon/raw/master/pheno2go.txt) - Correspondence of Phenotype and GO classes extracted
   using logical definitions in PhenomeNET ontology
 
-* rules.txt - Set of generated rules for regulatory phenotypes and
+* [rules.txt](https://github.com/bio-ontology-research-group/phenogocon/raw/master/rules.txt) - Set of generated rules for regulatory phenotypes and
   abnormalities of biological processes. Includes inconsistency checking rules
 
-* rules_prop.txt - Set of generated rules for regulatory phenotypes and
+* [rules_prop.txt](https://github.com/bio-ontology-research-group/phenogocon/raw/master/rules_prop.txt) - Set of generated rules for regulatory phenotypes and
   abnormalities of biological processes propagated using GO structure.
   Includes inconsistency checking rules
 
